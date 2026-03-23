@@ -1,12 +1,11 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, String as SorobanString,
-    Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol, Vec,
 };
 
 use shared::{
-    CurrencyCode, RateData, RateUpdateEvent, UPDATE_INTERVAL_SECONDS,
-    EMERGENCY_THRESHOLD_BPS, median, calculate_deviation,
+    calculate_deviation, median, CurrencyCode, RateData, RateUpdateEvent, EMERGENCY_THRESHOLD_BPS,
+    UPDATE_INTERVAL_SECONDS,
 };
 
 mod shared {
@@ -64,8 +63,8 @@ impl OracleContract {
         }
 
         // Validate inputs
-        if validators.len() < min_signatures {
-            panic!("Invalid validator configuration");
+        if !((1..=validators.len()).contains(&min_signatures)) {
+            panic!("Invalid min_signatures configuration");
         }
 
         if min_signatures == 0 {
@@ -74,11 +73,21 @@ impl OracleContract {
 
         // Store configuration
         env.storage().instance().set(&DATA_KEY.admin, &admin);
-        env.storage().instance().set(&DATA_KEY.validators, &validators);
-        env.storage().instance().set(&DATA_KEY.min_signatures, &min_signatures);
-        env.storage().instance().set(&DATA_KEY.currencies, &currencies);
-        env.storage().instance().set(&DATA_KEY.basket_weights, &basket_weights);
-        env.storage().instance().set(&DATA_KEY.update_interval, &UPDATE_INTERVAL_SECONDS);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.validators, &validators);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.min_signatures, &min_signatures);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.currencies, &currencies);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.basket_weights, &basket_weights);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.update_interval, &UPDATE_INTERVAL_SECONDS);
 
         // Initialize rates map
         let rates: Map<CurrencyCode, RateData> = Map::new(&env);
@@ -112,7 +121,11 @@ impl OracleContract {
         }
 
         // Check update interval
-        let last_update: u64 = env.storage().instance().get(&DATA_KEY.last_update).unwrap_or(0);
+        let last_update: u64 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.last_update)
+            .unwrap_or(0);
         let update_interval: u64 = env
             .storage()
             .instance()
@@ -141,24 +154,30 @@ impl OracleContract {
             currency: currency.clone(),
             rate_usd: median_rate,
             timestamp: current_time,
-            sources: sources,
+            sources,
         };
 
         // Update rates map
-        let mut rates: Map<CurrencyCode, RateData> =
-            env.storage().instance().get(&DATA_KEY.rates).unwrap_or(Map::new(&env));
+        let mut rates: Map<CurrencyCode, RateData> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.rates)
+            .unwrap_or(Map::new(&env));
         rates.set(currency.clone(), rate_data);
         env.storage().instance().set(&DATA_KEY.rates, &rates);
-        env.storage().instance().set(&DATA_KEY.last_update, &current_time);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.last_update, &current_time);
 
         // Emit RateUpdateEvent
         let event = RateUpdateEvent {
             currency: currency.clone(),
             rate: median_rate,
             timestamp: current_time,
-            validators: Vec::new(&env), 
+            validators: Vec::new(&env),
         };
-        env.events().publish((symbol_short!("rate_upd"), currency.clone()), event);
+        env.events()
+            .publish((symbol_short!("rate_upd"), currency.clone()), event);
     }
 
     /// Get current rate for a currency
@@ -172,8 +191,11 @@ impl OracleContract {
 
     /// Get ACBU/USD rate (basket-weighted)
     pub fn get_acbu_usd_rate(env: Env) -> i128 {
-        let basket_weights: Map<CurrencyCode, i128> =
-            env.storage().instance().get(&DATA_KEY.basket_weights).unwrap();
+        let basket_weights: Map<CurrencyCode, i128> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.basket_weights)
+            .unwrap();
         let currencies: Vec<CurrencyCode> =
             env.storage().instance().get(&DATA_KEY.currencies).unwrap();
 
@@ -202,8 +224,7 @@ impl OracleContract {
     /// Add validator (admin only)
     pub fn add_validator(env: Env, validator: Address) {
         Self::check_admin(&env);
-        let validators: Vec<Address> =
-            env.storage().instance().get(&DATA_KEY.validators).unwrap();
+        let validators: Vec<Address> = env.storage().instance().get(&DATA_KEY.validators).unwrap();
 
         // Check if already exists
         for v in validators.iter() {
@@ -214,15 +235,20 @@ impl OracleContract {
 
         let mut new_validators = validators.clone();
         new_validators.push_back(validator);
-        env.storage().instance().set(&DATA_KEY.validators, &new_validators);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.validators, &new_validators);
     }
 
     /// Remove validator (admin only)
     pub fn remove_validator(env: Env, validator: Address) {
         Self::check_admin(&env);
-        let validators: Vec<Address> =
-            env.storage().instance().get(&DATA_KEY.validators).unwrap();
-        let min_sigs: u32 = env.storage().instance().get(&DATA_KEY.min_signatures).unwrap();
+        let validators: Vec<Address> = env.storage().instance().get(&DATA_KEY.validators).unwrap();
+        let min_sigs: u32 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.min_signatures)
+            .unwrap();
 
         // Can't remove if it would make validators < min_signatures
         if validators.len() <= min_sigs {
@@ -237,7 +263,9 @@ impl OracleContract {
             }
         }
 
-        env.storage().instance().set(&DATA_KEY.validators, &new_validators);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.validators, &new_validators);
     }
 
     /// Get all validators
@@ -247,13 +275,19 @@ impl OracleContract {
 
     /// Get minimum signatures required
     pub fn get_min_signatures(env: Env) -> u32 {
-        env.storage().instance().get(&DATA_KEY.min_signatures).unwrap()
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.min_signatures)
+            .unwrap()
     }
 
     // Private helper functions
     fn get_rate_internal(env: &Env, currency: &CurrencyCode) -> Option<RateData> {
-        let rates: Map<CurrencyCode, RateData> =
-            env.storage().instance().get(&DATA_KEY.rates).unwrap_or(Map::new(env));
+        let rates: Map<CurrencyCode, RateData> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.rates)
+            .unwrap_or(Map::new(env));
         rates.get(currency.clone())
     }
 

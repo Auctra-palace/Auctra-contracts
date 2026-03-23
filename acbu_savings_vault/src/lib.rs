@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,12 +45,16 @@ impl SavingsVault {
         if env.storage().instance().has(&DATA_KEY.admin) {
             panic!("Contract already initialized");
         }
-        if fee_rate_bps < 0 || fee_rate_bps > 10_000 {
+        if !(0..=10_000).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
         env.storage().instance().set(&DATA_KEY.admin, &admin);
-        env.storage().instance().set(&DATA_KEY.acbu_token, &acbu_token);
-        env.storage().instance().set(&DATA_KEY.fee_rate, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.acbu_token, &acbu_token);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
         env.storage().instance().set(&DATA_KEY.paused, &false);
     }
 
@@ -63,7 +65,11 @@ impl SavingsVault {
         amount: i128,
         term_seconds: u64,
     ) -> Result<i128, soroban_sdk::Error> {
-        let paused: bool = env.storage().instance().get(&DATA_KEY.paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.paused)
+            .unwrap_or(false);
         if paused {
             return Err(soroban_sdk::Error::from_contract_error(1001));
         }
@@ -93,8 +99,17 @@ impl SavingsVault {
     }
 
     /// Withdraw (unlock) ACBU after term. Contract transfers ACBU back to user.
-    pub fn withdraw(env: Env, user: Address, term_seconds: u64, amount: i128) -> Result<(), soroban_sdk::Error> {
-        let paused: bool = env.storage().instance().get(&DATA_KEY.paused).unwrap_or(false);
+    pub fn withdraw(
+        env: Env,
+        user: Address,
+        term_seconds: u64,
+        amount: i128,
+    ) -> Result<(), soroban_sdk::Error> {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.paused)
+            .unwrap_or(false);
         if paused {
             return Err(soroban_sdk::Error::from_contract_error(1001));
         }
@@ -104,7 +119,11 @@ impl SavingsVault {
         user.require_auth();
 
         let key = (user.clone(), term_seconds);
-        let balance: i128 = env.storage().temporary().get(&key).ok_or(soroban_sdk::Error::from_contract_error(1003))?;
+        let balance: i128 = env
+            .storage()
+            .temporary()
+            .get(&key)
+            .ok_or(soroban_sdk::Error::from_contract_error(1003))?;
         if balance < amount {
             return Err(soroban_sdk::Error::from_contract_error(1004));
         }

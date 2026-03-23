@@ -2,7 +2,6 @@
 
 use acbu_minting::{MintingContract, MintingContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
-use shared::CurrencyCode;
 
 #[test]
 fn test_initialize() {
@@ -28,7 +27,7 @@ fn test_initialize() {
     );
 
     assert_eq!(client.get_fee_rate(), fee_rate);
-    assert_eq!(client.is_paused(), false);
+    assert!(!client.is_paused());
 }
 
 #[test]
@@ -88,11 +87,11 @@ fn test_pause_unpause() {
         &fee_rate,
     );
 
-    assert_eq!(client.is_paused(), false);
+    assert!(!client.is_paused());
     client.pause();
-    assert_eq!(client.is_paused(), true);
+    assert!(client.is_paused());
     client.unpause();
-    assert_eq!(client.is_paused(), false);
+    assert!(!client.is_paused());
 }
 
 #[test]

@@ -6,7 +6,7 @@ use soroban_sdk::{
 
 use shared::{
     calculate_amount_after_fee, calculate_fee, AccountDetails, BurnEvent, CurrencyCode,
-    MIN_BURN_AMOUNT, BASIS_POINTS, DECIMALS,
+    BASIS_POINTS, DECIMALS, MIN_BURN_AMOUNT,
 };
 
 mod shared {
@@ -58,19 +58,29 @@ impl BurningContract {
         }
 
         // Validate inputs
-        if fee_rate_bps < 0 || fee_rate_bps > BASIS_POINTS {
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
 
         // Store configuration
         env.storage().instance().set(&DATA_KEY.admin, &admin);
         env.storage().instance().set(&DATA_KEY.oracle, &oracle);
-        env.storage().instance().set(&DATA_KEY.reserve_tracker, &reserve_tracker);
-        env.storage().instance().set(&DATA_KEY.acbu_token, &acbu_token);
-        env.storage().instance().set(&DATA_KEY.withdrawal_processor, &withdrawal_processor);
-        env.storage().instance().set(&DATA_KEY.fee_rate, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.reserve_tracker, &reserve_tracker);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.acbu_token, &acbu_token);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.withdrawal_processor, &withdrawal_processor);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
         env.storage().instance().set(&DATA_KEY.paused, &false);
-        env.storage().instance().set(&DATA_KEY.min_burn_amount, &MIN_BURN_AMOUNT);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.min_burn_amount, &MIN_BURN_AMOUNT);
     }
 
     /// Burn ACBU for single currency redemption
@@ -85,7 +95,11 @@ impl BurningContract {
         user.require_auth();
 
         // Validate amount
-        let min_amount: i128 = env.storage().instance().get(&DATA_KEY.min_burn_amount).unwrap();
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.min_burn_amount)
+            .unwrap();
         if acbu_amount < min_amount {
             panic!("Invalid burn amount");
         }
@@ -122,7 +136,8 @@ impl BurningContract {
             rate: currency_rate,
             timestamp: env.ledger().timestamp(),
         };
-        env.events().publish((symbol_short!("burn"), user), burn_event);
+        env.events()
+            .publish((symbol_short!("burn"), user), burn_event);
 
         local_amount
     }
@@ -138,7 +153,11 @@ impl BurningContract {
         user.require_auth();
 
         // Validate amount
-        let min_amount: i128 = env.storage().instance().get(&DATA_KEY.min_burn_amount).unwrap();
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.min_burn_amount)
+            .unwrap();
         if acbu_amount < min_amount {
             panic!("Invalid burn amount");
         }
@@ -169,7 +188,7 @@ impl BurningContract {
         let mut local_amounts = Vec::new(&env);
         for i in 0..recipient_accounts.len() {
             let account = recipient_accounts.get(i).unwrap();
-            
+
             let mut current_net = amount_per_account;
             if remainder_net > 0 {
                 current_net += 1;
@@ -199,7 +218,8 @@ impl BurningContract {
                 rate: currency_rate,
                 timestamp: env.ledger().timestamp(),
             };
-            env.events().publish((symbol_short!("burn"), user.clone()), burn_event);
+            env.events()
+                .publish((symbol_short!("burn"), user.clone()), burn_event);
         }
 
         local_amounts
@@ -220,10 +240,12 @@ impl BurningContract {
     /// Set fee rate (admin only)
     pub fn set_fee_rate(env: Env, fee_rate_bps: i128) {
         Self::check_admin(&env);
-        if fee_rate_bps < 0 || fee_rate_bps > BASIS_POINTS {
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
-        env.storage().instance().set(&DATA_KEY.fee_rate, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
     }
 
     /// Get current fee rate
@@ -233,7 +255,10 @@ impl BurningContract {
 
     /// Check if contract is paused
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DATA_KEY.paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.paused)
+            .unwrap_or(false)
     }
 
     // Private helper functions

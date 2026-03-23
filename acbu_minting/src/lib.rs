@@ -5,8 +5,8 @@ use soroban_sdk::{
 };
 
 use shared::{
-    calculate_amount_after_fee, calculate_fee, MintEvent,
-    MIN_MINT_AMOUNT, MAX_MINT_AMOUNT, BASIS_POINTS, DECIMALS,
+    calculate_amount_after_fee, calculate_fee, MintEvent, BASIS_POINTS, DECIMALS, MAX_MINT_AMOUNT,
+    MIN_MINT_AMOUNT,
 };
 
 mod shared {
@@ -60,20 +60,32 @@ impl MintingContract {
         }
 
         // Validate inputs
-        if fee_rate_bps < 0 || fee_rate_bps > BASIS_POINTS {
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
 
         // Store configuration
         env.storage().instance().set(&DATA_KEY.admin, &admin);
         env.storage().instance().set(&DATA_KEY.oracle, &oracle);
-        env.storage().instance().set(&DATA_KEY.reserve_tracker, &reserve_tracker);
-        env.storage().instance().set(&DATA_KEY.acbu_token, &acbu_token);
-        env.storage().instance().set(&DATA_KEY.usdc_token, &usdc_token);
-        env.storage().instance().set(&DATA_KEY.fee_rate, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.reserve_tracker, &reserve_tracker);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.acbu_token, &acbu_token);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.usdc_token, &usdc_token);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
         env.storage().instance().set(&DATA_KEY.paused, &false);
-        env.storage().instance().set(&DATA_KEY.min_mint_amount, &MIN_MINT_AMOUNT);
-        env.storage().instance().set(&DATA_KEY.max_mint_amount, &MAX_MINT_AMOUNT);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.min_mint_amount, &MIN_MINT_AMOUNT);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.max_mint_amount, &MAX_MINT_AMOUNT);
     }
 
     /// Mint ACBU from USDC deposit
@@ -82,8 +94,16 @@ impl MintingContract {
         user.require_auth();
 
         // Validate amount
-        let min_amount: i128 = env.storage().instance().get(&DATA_KEY.min_mint_amount).unwrap();
-        let max_amount: i128 = env.storage().instance().get(&DATA_KEY.max_mint_amount).unwrap();
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.min_mint_amount)
+            .unwrap();
+        let max_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.max_mint_amount)
+            .unwrap();
 
         if usdc_amount < min_amount || usdc_amount > max_amount {
             panic!("Invalid mint amount");
@@ -123,7 +143,8 @@ impl MintingContract {
             rate: acbu_rate,
             timestamp: env.ledger().timestamp(),
         };
-        env.events().publish((symbol_short!("mint"), recipient), mint_event);
+        env.events()
+            .publish((symbol_short!("mint"), recipient), mint_event);
 
         acbu_amount
     }
@@ -142,7 +163,11 @@ impl MintingContract {
         Self::check_admin(&env, &admin);
 
         // Validate amount
-        let min_amount: i128 = env.storage().instance().get(&DATA_KEY.min_mint_amount).unwrap();
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.min_mint_amount)
+            .unwrap();
         if amount < min_amount {
             panic!("Invalid mint amount");
         }
@@ -182,7 +207,8 @@ impl MintingContract {
             rate: acbu_rate,
             timestamp: env.ledger().timestamp(),
         };
-        env.events().publish((symbol_short!("mint"), recipient), mint_event);
+        env.events()
+            .publish((symbol_short!("mint"), recipient), mint_event);
 
         acbu_amount
     }
@@ -205,10 +231,12 @@ impl MintingContract {
     pub fn set_fee_rate(env: Env, fee_rate_bps: i128) {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         admin.require_auth();
-        if fee_rate_bps < 0 || fee_rate_bps > BASIS_POINTS {
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
-        env.storage().instance().set(&DATA_KEY.fee_rate, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
     }
 
     /// Get current fee rate
@@ -218,7 +246,10 @@ impl MintingContract {
 
     /// Check if contract is paused
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DATA_KEY.paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.paused)
+            .unwrap_or(false)
     }
 
     // Private helper functions

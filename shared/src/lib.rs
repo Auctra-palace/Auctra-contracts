@@ -16,7 +16,7 @@ impl CurrencyCode {
 #[derive(Clone, Debug)]
 pub struct RateData {
     pub currency: CurrencyCode,
-    pub rate_usd: i128,        // Rate in 7 decimals (e.g., 0.0012345 = 12345)
+    pub rate_usd: i128, // Rate in 7 decimals (e.g., 0.0012345 = 12345)
     pub timestamp: u64,
     pub sources: soroban_sdk::Vec<i128>, // Source rates for median calculation
 }
@@ -26,8 +26,8 @@ pub struct RateData {
 #[derive(Clone, Debug)]
 pub struct ReserveData {
     pub currency: CurrencyCode,
-    pub amount: i128,           // Reserve amount in native currency
-    pub value_usd: i128,        // Value in USD (7 decimals)
+    pub amount: i128,    // Reserve amount in native currency
+    pub value_usd: i128, // Value in USD (7 decimals)
     pub timestamp: u64,
 }
 
@@ -118,7 +118,7 @@ pub fn median(values: soroban_sdk::Vec<i128>) -> Option<i128> {
     if values.is_empty() {
         return None;
     }
-    
+
     let mut sorted = values.clone();
     let n = sorted.len();
     for i in 0..n {
@@ -131,8 +131,9 @@ pub fn median(values: soroban_sdk::Vec<i128>) -> Option<i128> {
             }
         }
     }
-    
+
     let mid = n / 2;
+    #[allow(clippy::manual_is_multiple_of)]
     if n % 2 == 0 {
         Some((sorted.get(mid - 1).unwrap() + sorted.get(mid).unwrap()) / 2)
     } else {
