@@ -5,8 +5,8 @@ use soroban_sdk::{
 };
 
 use shared::{
-    CurrencyCode, RateData, RateUpdateEvent, DECIMALS, UPDATE_INTERVAL_SECONDS,
-    EMERGENCY_THRESHOLD_BPS, OUTLIER_THRESHOLD_BPS, median, calculate_deviation,
+    CurrencyCode, RateData, RateUpdateEvent, UPDATE_INTERVAL_SECONDS,
+    EMERGENCY_THRESHOLD_BPS, median, calculate_deviation,
 };
 
 mod shared {
@@ -28,13 +28,13 @@ pub struct DataKey {
 
 const DATA_KEY: DataKey = DataKey {
     admin: symbol_short!("ADMIN"),
-    validators: symbol_short!("VALIDATORS"),
+    validators: symbol_short!("VALIDTRS"),
     min_signatures: symbol_short!("MIN_SIG"),
-    currencies: symbol_short!("CURRENCIES"),
+    currencies: symbol_short!("CURRNCYS"),
     rates: symbol_short!("RATES"),
-    last_update: symbol_short!("LAST_UPDATE"),
-    update_interval: symbol_short!("UPDATE_INT"),
-    basket_weights: symbol_short!("BASKET_WTS"),
+    last_update: symbol_short!("LAST_UPD"),
+    update_interval: symbol_short!("UPD_INT"),
+    basket_weights: symbol_short!("BSK_WTS"),
 };
 
 #[contracttype]
@@ -64,7 +64,7 @@ impl OracleContract {
         }
 
         // Validate inputs
-        if validators.len() < min_signatures as usize {
+        if validators.len() < min_signatures {
             panic!("Invalid validator configuration");
         }
 
@@ -89,17 +89,20 @@ impl OracleContract {
     /// Update rate for a currency (validator function)
     pub fn update_rate(
         env: Env,
+        validator: Address,
         currency: CurrencyCode,
         rate: i128,
         sources: Vec<i128>,
-        timestamp: u64,
+        _timestamp: u64,
     ) {
+        // Authorize validator
+        validator.require_auth();
+
         // Check if caller is a validator
         let validators: Vec<Address> = env.storage().instance().get(&DATA_KEY.validators).unwrap();
-        let caller = env.invoker();
         let mut is_validator = false;
-        for validator in validators.iter() {
-            if *validator == caller {
+        for v in validators.iter() {
+            if v == validator {
                 is_validator = true;
                 break;
             }
@@ -131,16 +134,7 @@ impl OracleContract {
         }
 
         // Calculate median from sources
-        let sources_vec: Vec<i128> = sources.to_vec();
-        let median_rate = median(&sources_vec).unwrap_or(rate);
-
-        // Outlier detection
-        for source_rate in sources_vec.iter() {
-            let deviation = calculate_deviation(*source_rate, median_rate);
-            if deviation > OUTLIER_THRESHOLD_BPS {
-                // Log outlier but continue with median
-            }
-        }
+        let median_rate = median(sources.clone()).unwrap_or(rate);
 
         // Create rate data
         let rate_data = RateData {
@@ -162,9 +156,9 @@ impl OracleContract {
             currency: currency.clone(),
             rate: median_rate,
             timestamp: current_time,
-            validators: Vec::new(&env), // Would include all validators who signed
+            validators: Vec::new(&env), 
         };
-        env.events().publish((symbol_short!("rate_update"), currency), event);
+        env.events().publish((symbol_short!("rate_upd"), currency.clone()), event);
     }
 
     /// Get current rate for a currency
@@ -187,8 +181,8 @@ impl OracleContract {
         let mut total_weight = 0i128;
 
         for currency in currencies.iter() {
-            if let Some(weight) = basket_weights.get(currency) {
-                if let Some(rate_data) = Self::get_rate_internal(&env, currency) {
+            if let Some(weight) = basket_weights.get(currency.clone()) {
+                if let Some(rate_data) = Self::get_rate_internal(&env, &currency) {
                     // Weight is in basis points (e.g., 1800 = 18%)
                     let contribution = (rate_data.rate_usd * weight) / 10_000;
                     weighted_sum += contribution;
@@ -208,36 +202,37 @@ impl OracleContract {
     /// Add validator (admin only)
     pub fn add_validator(env: Env, validator: Address) {
         Self::check_admin(&env);
-        let mut validators: Vec<Address> =
+        let validators: Vec<Address> =
             env.storage().instance().get(&DATA_KEY.validators).unwrap();
 
         // Check if already exists
         for v in validators.iter() {
-            if *v == validator {
+            if v == validator {
                 panic!("Validator already exists");
             }
         }
 
-        validators.push_back(validator);
-        env.storage().instance().set(&DATA_KEY.validators, &validators);
+        let mut new_validators = validators.clone();
+        new_validators.push_back(validator);
+        env.storage().instance().set(&DATA_KEY.validators, &new_validators);
     }
 
     /// Remove validator (admin only)
     pub fn remove_validator(env: Env, validator: Address) {
         Self::check_admin(&env);
-        let mut validators: Vec<Address> =
+        let validators: Vec<Address> =
             env.storage().instance().get(&DATA_KEY.validators).unwrap();
         let min_sigs: u32 = env.storage().instance().get(&DATA_KEY.min_signatures).unwrap();
 
         // Can't remove if it would make validators < min_signatures
-        if validators.len() <= min_sigs as usize {
+        if validators.len() <= min_sigs {
             panic!("Cannot remove validator: would violate minimum signatures");
         }
 
         // Remove validator
         let mut new_validators = Vec::new(&env);
         for v in validators.iter() {
-            if *v != validator {
+            if v != validator {
                 new_validators.push_back(v.clone());
             }
         }
@@ -259,13 +254,11 @@ impl OracleContract {
     fn get_rate_internal(env: &Env, currency: &CurrencyCode) -> Option<RateData> {
         let rates: Map<CurrencyCode, RateData> =
             env.storage().instance().get(&DATA_KEY.rates).unwrap_or(Map::new(env));
-        rates.get(currency)
+        rates.get(currency.clone())
     }
 
     fn check_admin(env: &Env) {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
-        if admin != env.invoker() {
-            panic!("Unauthorized: admin only");
-        }
+        admin.require_auth();
     }
 }

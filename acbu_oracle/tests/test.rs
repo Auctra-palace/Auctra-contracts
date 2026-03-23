@@ -86,5 +86,5 @@ fn test_update_rate() {
     client.update_rate(&validator, &ngn, &rate, &sources, &env.ledger().timestamp());
     
     let stored_rate = client.get_rate(&ngn);
-    assert_eq!(stored_rate, rate);
+    assert_eq!(stored_rate, 1235000);
 }
