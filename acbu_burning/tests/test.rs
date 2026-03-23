@@ -88,3 +88,63 @@ fn test_burn_for_basket_fee_accounting() {
     let expected_total_fee = (acbu_amount * fee_rate) / BASIS_POINTS;
     assert_eq!(total_event_fee, expected_total_fee, "Sum of fees in events should equal total fee calculated");
 }
+
+#[test]
+fn test_burn_for_basket_dust_handling() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let reserve_tracker = Address::generate(&env);
+    let acbu_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    let withdrawal_processor = Address::generate(&env);
+    let fee_rate = 0; // 0% to focus on amount dust
+
+    let contract_id = env.register_contract(None, BurningContract);
+    let client = BurningContractClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &oracle,
+        &reserve_tracker,
+        &acbu_token,
+        &withdrawal_processor,
+        &fee_rate,
+    );
+
+    let user = Address::generate(&env);
+    // 10,000,001 is not divisible by 13 and exceeds MIN_BURN_AMOUNT
+    let acbu_amount = 10_000_001;
+    
+    let currency_ngn = CurrencyCode::new(&env, "NGN");
+
+    let mut recipients = Vec::new(&env);
+    for _ in 0..13 {
+        recipients.push_back(AccountDetails {
+            account_number: SorobanString::from_str(&env, "dust_acc"),
+            bank_code: SorobanString::from_str(&env, "bank"),
+            account_name: SorobanString::from_str(&env, "User"),
+            currency: currency_ngn.clone(),
+        });
+    }
+
+    let token_admin = soroban_sdk::token::StellarAssetClient::new(&env, &acbu_token);
+    token_admin.mint(&user, &acbu_amount);
+
+    client.burn_for_basket(&user, &acbu_amount, &recipients);
+
+    let events = env.events().all();
+    let mut total_event_acbu = 0i128;
+    for event in events.iter() {
+        if event.0 != contract_id { continue; }
+        let topics = event.1;
+        if topics.len() > 0 && soroban_sdk::Symbol::from_val(&env, &topics.get(0).unwrap()) == symbol_short!("burn") {
+            let burn_event: BurnEvent = event.2.into_val(&env);
+            total_event_acbu += burn_event.acbu_amount;
+        }
+    }
+
+    assert_eq!(total_event_acbu, acbu_amount, "Every single unit of ACBU (including dust) must be accounted for in events");
+}
+
