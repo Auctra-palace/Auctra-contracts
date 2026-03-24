@@ -123,6 +123,7 @@ fn test_set_fee_rate() {
     );
 
     let new_fee_rate = 500; // 0.5%
+    env.mock_all_auths();
     client.set_fee_rate(&new_fee_rate);
     assert_eq!(client.get_fee_rate(), new_fee_rate);
 }

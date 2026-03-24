@@ -194,6 +194,10 @@ impl MintingContract {
         let usd_after_fee = calculate_amount_after_fee(usd_value, fee_rate);
         let acbu_amount = (usd_after_fee * DECIMALS) / acbu_rate;
 
+        // Mark the tx_id as used before minting (checks-effects-interactions pattern)
+        // to prevent any reentrancy-based double-spend via cross-contract calls.
+        env.storage().persistent().set(&used_key, &true);
+
         // Mint ACBU to recipient
         let acbu_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &acbu_token);
         acbu_admin_client.mint(&recipient, &acbu_amount);
