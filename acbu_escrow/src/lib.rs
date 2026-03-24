@@ -90,7 +90,9 @@ pub fn create(
         return Err(soroban_sdk::Error::from_contract_error(3005)); // ESCROW_ALREADY_EXISTS
     }
 
-    let acbu: Address = env.storage().instance().get(&DATA_KEY.acbu_token).unwrap().unwrap();
+    /// double unwrap resolve
+    let acbu: Address = env.storage().instance().get(&DATA_KEY.acbu_token)
+    .expect("acbu_token not set — contract not initialized");
     let client = soroban_sdk::token::Client::new(&env, &acbu);
     client.transfer(&payer, &env.current_contract_address(), &amount);
 
@@ -128,8 +130,8 @@ pub fn create(
     /// Refund escrow: payer gets ACBU back (admin or dispute resolution)
     /// key is same as release since it identifies which escrow to refund
     pub fn refund(env: Env, escrow_id: u64, payer: Address) -> Result<(), soroban_sdk::Error> {
-    let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap().unwrap();
-    admin.require_auth();
+    let admin: Address = env.storage().instance().get(&DATA_KEY.admin)
+    .expect("admin not set — contract not initialized");
 
     let key = EscrowId(payer.clone(), escrow_id);
     let (stored_payer, _payee, amount): (Address, Address, i128) =
@@ -146,14 +148,16 @@ pub fn create(
 }
 
     pub fn pause(env: Env) -> Result<(), soroban_sdk::Error> {
-        let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap().unwrap();
+        let admin: Address = env.storage().instance().get(&DATA_KEY.admin)
+    .expect("admin not set — contract not initialized");
         admin.require_auth();
         env.storage().instance().set(&DATA_KEY.paused, &true);
         Ok(())
     }
 
     pub fn unpause(env: Env) -> Result<(), soroban_sdk::Error> {
-        let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap().unwrap();
+        let admin: Address = env.storage().instance().get(&DATA_KEY.admin)
+    .expect("admin not set — contract not initialized");
         admin.require_auth();
         env.storage().instance().set(&DATA_KEY.paused, &false);
         Ok(())
