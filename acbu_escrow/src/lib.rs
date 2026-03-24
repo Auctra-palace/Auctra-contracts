@@ -85,6 +85,24 @@ impl Escrow {
             return Err(soroban_sdk::Error::from_contract_error(3002));
         }
         payer.require_auth();
+        let key = (symbol_short!("ESCROW"), escrow_id);
+        if env.storage().temporary().has(&key) {
+            return Err(soroban_sdk::Error::from_contract_error(3005));
+        }
+        let acbu: Address = env.storage().instance().get(&DATA_KEY.acbu_token).unwrap().unwrap();
+        let client = soroban_sdk::token::Client::new(&env, &acbu);
+        client.transfer(&payer, &env.current_contract_address(), &amount);
+        env.storage().temporary().set(&key, &(payer.clone(), payee.clone(), amount));
+        env.events().publish(
+            (symbol_short!("EscrowCreated"), escrow_id),
+            EscrowCreatedEvent {
+                escrow_id,
+                payer: payer.clone(),
+                payee: payee.clone(),
+                amount,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         // Scope key to (payer, escrow_id) — prevents collisions across payers
         let key = EscrowId(payer.clone(), escrow_id);
