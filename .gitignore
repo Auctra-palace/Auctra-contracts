@@ -1,0 +1,26 @@
+# Build artifacts
+/target/
+
+# Cargo lock (for libraries; keep for application crates if preferred)
+Cargo.lock
+
+# Editor/IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+target/
+Cargo.lock
+**/*.rs.bk
+.soroban/
+.stellar/
+test_snapshots/
