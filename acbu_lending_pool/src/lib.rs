@@ -1,7 +1,12 @@
-#![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
 };
+
+use shared::BASIS_POINTS;
+
+mod shared {
+    pub use shared::*;
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,7 +53,7 @@ impl LendingPool {
         if env.storage().instance().has(&DATA_KEY.admin) {
             panic!("Contract already initialized");
         }
-        if fee_rate_bps < 0 || fee_rate_bps > 10_000 {
+        if fee_rate_bps < 0 || fee_rate_bps > BASIS_POINTS {
             panic!("Invalid fee rate");
         }
         env.storage().instance().set(&DATA_KEY.admin, &admin);
