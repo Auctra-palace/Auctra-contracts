@@ -2,6 +2,12 @@
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 
+use shared::{calculate_fee, BASIS_POINTS};
+
+mod shared {
+    pub use shared::*;
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataKey {
@@ -70,10 +76,10 @@ impl SavingsVault {
         if env.storage().instance().has(&DATA_KEY.admin) {
             panic!("Contract already initialized");
         }
-        if !(0..=10_000).contains(&fee_rate_bps) {
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
             panic!("Invalid fee rate");
         }
-        if !(0..=10_000).contains(&yield_rate_bps) {
+        if !(0..=BASIS_POINTS).contains(&yield_rate_bps) {
             panic!("Invalid yield rate");
         }
         env.storage().instance().set(&DATA_KEY.admin, &admin);
@@ -189,7 +195,7 @@ impl SavingsVault {
             .instance()
             .get(&DATA_KEY.yield_rate)
             .unwrap_or(0);
-        let fee_amount: i128 = (amount * fee_rate) / 10_000;
+        let fee_amount: i128 = calculate_fee(amount, fee_rate);
         let mut amount_left = amount;
         let mut updated_lots = Vec::new(&env);
         let mut yield_amount: i128 = 0;
@@ -290,7 +296,7 @@ impl SavingsVault {
             .and_then(|v| v.checked_mul(elapsed_i128))
             .ok_or(soroban_sdk::Error::from_contract_error(1005))?;
 
-        Ok(numerator / (10_000 * SECONDS_PER_YEAR))
+        Ok(numerator / (BASIS_POINTS * SECONDS_PER_YEAR))
     }
 
     pub fn pause(env: Env) -> Result<(), soroban_sdk::Error> {
