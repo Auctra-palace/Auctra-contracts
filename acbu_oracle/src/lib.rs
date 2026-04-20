@@ -6,7 +6,7 @@ use soroban_sdk::{
 
 use shared::{
     calculate_deviation, median, CurrencyCode, OutlierDetectionEvent, RateData, RateUpdateEvent,
-    EMERGENCY_THRESHOLD_BPS, OUTLIER_THRESHOLD_BPS, UPDATE_INTERVAL_SECONDS,
+    DECIMALS, EMERGENCY_THRESHOLD_BPS, OUTLIER_THRESHOLD_BPS, UPDATE_INTERVAL_SECONDS,
 };
 
 mod shared {
@@ -42,7 +42,7 @@ const DATA_KEY: DataKey = DataKey {
     version: symbol_short!("VERSION"),
 };
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 8;
 
 
 #[contracttype]
@@ -134,12 +134,7 @@ impl OracleContract {
             panic!("Unauthorized: validator only");
         }
 
-        // Check update interval
-        let last_update: u64 = env
-            .storage()
-            .instance()
-            .get(&DATA_KEY.last_update)
-            .unwrap_or(0);
+        // Check update interval per currency (not globally across all currencies).
         let update_interval: u64 = env
             .storage()
             .instance()
@@ -148,28 +143,34 @@ impl OracleContract {
         let current_time = env.ledger().timestamp();
 
         // Allow emergency updates if rate moved >5%
+        let existing_rate = Self::get_rate_internal(&env, &currency);
         let mut allow_update = false;
-        if let Some(existing_rate) = Self::get_rate_internal(&env, &currency) {
+        if let Some(existing_rate) = existing_rate.clone() {
             let deviation = calculate_deviation(rate, existing_rate.rate_usd);
             if deviation > EMERGENCY_THRESHOLD_BPS {
                 allow_update = true; // Emergency update
             }
         }
 
-        if !allow_update && current_time < last_update + update_interval {
-            panic!("Update interval not met");
+        if let Some(existing_rate) = existing_rate {
+            if !allow_update && current_time < existing_rate.timestamp + update_interval {
+                panic!("Update interval not met");
+            }
         }
 
         // Calculate median from sources
         let median_rate = median(sources.clone()).unwrap_or(rate);
 
-        // Detect outliers in the source rates
+        // Detect outliers in the source rates.
+        //
+        // NOTE: Some Stellar CLI / RPC stacks are sensitive to complex contracttype values in
+        // event topics; keep oracle rate updates functional even if event topic conversion would
+        // otherwise fail. We still compute deviation, but we avoid publishing per-currency topics.
         for i in 0..sources.len() {
             let source_rate = sources.get(i).unwrap();
             let deviation_bps = calculate_deviation(source_rate, median_rate);
-            
+
             if deviation_bps > OUTLIER_THRESHOLD_BPS {
-                // Emit outlier detection event
                 let outlier_event = OutlierDetectionEvent {
                     currency: currency.clone(),
                     median_rate,
@@ -178,7 +179,7 @@ impl OracleContract {
                     timestamp: current_time,
                 };
                 env.events()
-                    .publish((symbol_short!("outlier"), currency.clone()), outlier_event);
+                    .publish((symbol_short!("outlier"),), outlier_event);
             }
         }
 
@@ -202,15 +203,43 @@ impl OracleContract {
             .instance()
             .set(&DATA_KEY.last_update, &current_time);
 
-        // Emit RateUpdateEvent
+        // Emit RateUpdateEvent (symbol-only topic for compatibility).
         let event = RateUpdateEvent {
             currency: currency.clone(),
             rate: median_rate,
             timestamp: current_time,
             validators,
         };
-        env.events()
-            .publish((symbol_short!("rate_upd"), currency.clone()), event);
+        env.events().publish((symbol_short!("rate_upd"),), event);
+    }
+
+    /// Admin override for setting a currency USD rate.
+    ///
+    /// This is a pragmatic escape hatch for custodial MVP reliability when the
+    /// validator update path is unavailable; it writes the same `rates` storage
+    /// used by `get_rate`/`get_acbu_usd_rate`.
+    pub fn set_rate_admin(env: Env, currency: CurrencyCode, rate: i128) {
+        Self::check_admin(&env);
+        if rate <= 0 {
+            panic!("Invalid rate");
+        }
+        let current_time = env.ledger().timestamp();
+        let rate_data = RateData {
+            currency: currency.clone(),
+            rate_usd: rate,
+            timestamp: current_time,
+            sources: Vec::new(&env),
+        };
+        let mut rates: Map<CurrencyCode, RateData> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.rates)
+            .unwrap_or(Map::new(&env));
+        rates.set(currency, rate_data);
+        env.storage().instance().set(&DATA_KEY.rates, &rates);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.last_update, &current_time);
     }
 
     /// Get current rate for a currency
@@ -224,13 +253,20 @@ impl OracleContract {
 
     /// Get ACBU/USD rate (basket-weighted)
     pub fn get_acbu_usd_rate(env: Env) -> i128 {
+        // NOTE: These are instance-storage values that have historically changed encoding
+        // (due to `CurrencyCode` representation changes). Avoid `unwrap()` here so the
+        // mint path never host-traps on legacy/corrupted state; an unseeded basket
+        // simply returns a neutral 1.0 rate (DECIMALS).
         let basket_weights: Map<CurrencyCode, i128> = env
             .storage()
             .instance()
             .get(&DATA_KEY.basket_weights)
-            .unwrap();
-        let currencies: Vec<CurrencyCode> =
-            env.storage().instance().get(&DATA_KEY.currencies).unwrap();
+            .unwrap_or(Map::new(&env));
+        let currencies: Vec<CurrencyCode> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.currencies)
+            .unwrap_or(Vec::new(&env));
 
         let mut weighted_sum = 0i128;
         let mut total_weight = 0i128;
@@ -246,8 +282,11 @@ impl OracleContract {
             }
         }
 
+        // Avoid host trap when basket/oracle not yet seeded (e.g. fresh testnet deploy).
+        // Production must still publish rates + configure weights for all basket currencies
+        // before relying on mints.
         if total_weight == 0 {
-            panic!("No valid rates available");
+            return DECIMALS;
         }
 
         // Normalize to ensure weights sum to 100%
@@ -256,7 +295,10 @@ impl OracleContract {
 
     /// Basket currencies in declaration order (for S-token mint/burn loops).
     pub fn get_currencies(env: Env) -> Vec<CurrencyCode> {
-        env.storage().instance().get(&DATA_KEY.currencies).unwrap()
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.currencies)
+            .unwrap_or(Vec::new(&env))
     }
 
     /// Weight in basis points for a basket member (0 if not in basket).
@@ -265,8 +307,24 @@ impl OracleContract {
             .storage()
             .instance()
             .get(&DATA_KEY.basket_weights)
-            .unwrap();
+            .unwrap_or(Map::new(&env));
         basket_weights.get(currency).unwrap_or(0)
+    }
+
+    /// Replace basket configuration (admin only).
+    /// This is the supported way to re-seed basket data after an upgrade/migration.
+    pub fn set_basket_config(
+        env: Env,
+        currencies: Vec<CurrencyCode>,
+        basket_weights: Map<CurrencyCode, i128>,
+    ) {
+        Self::check_admin(&env);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.currencies, &currencies);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.basket_weights, &basket_weights);
     }
 
     /// Configure Soroban token contract address for an Afreum-style S-token (admin).
@@ -379,6 +437,42 @@ impl OracleContract {
         let current_version = VERSION;
         let stored_version: u32 = env.storage().instance().get(&DATA_KEY.version).unwrap_or(0);
         if stored_version < current_version {
+            // v2 migration: reset s_tokens to avoid deserialization traps when
+            // CurrencyCode representation changes across upgrades.
+            if stored_version < 2 {
+                let s_tokens_empty: Map<CurrencyCode, Address> = Map::new(&env);
+                env.storage()
+                    .instance()
+                    .set(&DATA_KEY.s_tokens, &s_tokens_empty);
+            }
+            // v3 migration: clear rates keyed by old CurrencyCode encoding.
+            if stored_version < 3 {
+                // Rates are also keyed by CurrencyCode; clear them to avoid traps when
+                // the serialized key format changed across upgrades.
+                let rates_empty: Map<CurrencyCode, RateData> = Map::new(&env);
+                env.storage().instance().set(&DATA_KEY.rates, &rates_empty);
+                env.storage().instance().set(&DATA_KEY.last_update, &0u64);
+            }
+            // v5+ migration: several instance-storage maps are keyed by `CurrencyCode` and have
+            // historically changed encoding across upgrades. Clear them to avoid host traps on
+            // reads/writes, then re-seed via admin calls.
+            if stored_version < 6 {
+                let currencies_empty: Vec<CurrencyCode> = Vec::new(&env);
+                let basket_weights_empty: Map<CurrencyCode, i128> = Map::new(&env);
+                env.storage()
+                    .instance()
+                    .set(&DATA_KEY.currencies, &currencies_empty);
+                env.storage()
+                    .instance()
+                    .set(&DATA_KEY.basket_weights, &basket_weights_empty);
+
+                let rates_empty: Map<CurrencyCode, RateData> = Map::new(&env);
+                env.storage().instance().set(&DATA_KEY.rates, &rates_empty);
+                env.storage().instance().set(&DATA_KEY.last_update, &0u64);
+
+                let s_tokens_empty: Map<CurrencyCode, Address> = Map::new(&env);
+                env.storage().instance().set(&DATA_KEY.s_tokens, &s_tokens_empty);
+            }
             env.storage()
                 .instance()
                 .set(&DATA_KEY.version, &current_version);

@@ -1,15 +1,17 @@
 #![no_std]
 
-use soroban_sdk::{contracttype, Address, String as SorobanString};
+use soroban_sdk::{contracttype, Address, String as SorobanString, Vec};
 
 /// Currency code type (e.g., "NGN", "KES", "RWF")
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CurrencyCode(pub SorobanString);
+pub struct CurrencyCode(pub Vec<SorobanString>);
 
 impl CurrencyCode {
     pub fn new(env: &soroban_sdk::Env, code: &str) -> Self {
-        CurrencyCode(SorobanString::from_str(env, code))
+        let mut v = Vec::new(env);
+        v.push_back(SorobanString::from_str(env, code));
+        CurrencyCode(v)
     }
 }
 

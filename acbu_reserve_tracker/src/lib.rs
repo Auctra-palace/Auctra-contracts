@@ -43,7 +43,7 @@ const DATA_KEY: DataKey = DataKey {
     version: symbol_short!("VERSION"),
 };
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 4;
 
 
 #[contract]
@@ -100,9 +100,9 @@ impl ReserveTrackerContract {
         reserves.set(currency.clone(), reserve_data);
         env.storage().instance().set(&DATA_KEY.reserves, &reserves);
 
-        // Emit Event
+        // Emit Event (avoid complex contracttype values in topics for compatibility).
         env.events().publish(
-            (symbol_short!("reserve"), currency.clone()),
+            (symbol_short!("reserve"),),
             ReserveUpdateEvent {
                 currency,
                 amount,
@@ -120,6 +120,13 @@ impl ReserveTrackerContract {
             .unwrap_or(Map::new(&env))
     }
 
+    /// Admin recovery helper: clear reserve map if legacy/corrupt data causes read traps.
+    pub fn reset_reserves(env: Env) {
+        Self::check_admin(&env);
+        let reserves: Map<CurrencyCode, ReserveData> = Map::new(&env);
+        env.storage().instance().set(&DATA_KEY.reserves, &reserves);
+    }
+
     /// Get total reserve value in USD
     pub fn get_total_reserve_value(env: Env) -> i128 {
         let reserves: Map<CurrencyCode, ReserveData> = env
@@ -131,7 +138,8 @@ impl ReserveTrackerContract {
 
         for entry in reserves.iter() {
             let data = entry.1;
-            total_value += data.value_usd;
+            // Saturate so summing many basket lines cannot overflow i128 and trap the VM.
+            total_value = total_value.saturating_add(data.value_usd);
         }
 
         total_value
@@ -139,6 +147,10 @@ impl ReserveTrackerContract {
 
     /// Check if reserves meet the minimum ratio (relative to minted ACBU)
     pub fn is_reserve_sufficient(env: Env, total_acbu_supply: i128) -> bool {
+        if total_acbu_supply < 0 {
+            return false;
+        }
+
         let total_reserve_value = Self::get_total_reserve_value(env.clone());
         let min_ratio: i128 = env
             .storage()
@@ -146,9 +158,23 @@ impl ReserveTrackerContract {
             .get(&DATA_KEY.min_reserve_ratio)
             .unwrap_or(10_000);
 
+        if min_ratio < 0 {
+            return false;
+        }
+
         // total_reserve_value / total_acbu_supply >= min_ratio / 10,000
         // total_reserve_value * 10,000 >= total_acbu_supply * min_ratio
-        total_reserve_value * 10_000 >= total_acbu_supply * min_ratio
+        //
+        // Use checked multiplication: raw `*` overflow traps as UnreachableCodeReached on Soroban.
+        let lhs = total_reserve_value.checked_mul(10_000);
+        let rhs = total_acbu_supply.checked_mul(min_ratio);
+        match (lhs, rhs) {
+            (Some(l), Some(r)) => l >= r,
+            // Reserve side product overflow → backing is extremely large vs any mint check here.
+            (None, Some(_)) => true,
+            // Supply * min_ratio overflow or reserve product missing while rhs ok → deny.
+            (Some(_), None) | (None, None) => false,
+        }
     }
 
     /// Verify reserves meet the minimum collateral ratio for the given circulating ACBU supply.
