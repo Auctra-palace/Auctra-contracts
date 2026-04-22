@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, IntoVal, String as SorobanString,
-    Symbol, Vec, BytesN,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, IntoVal,
+    String as SorobanString, Symbol, Vec,
 };
 
 use shared::{calculate_fee, BurnEvent, CurrencyCode, BASIS_POINTS, DECIMALS, MIN_BURN_AMOUNT};
@@ -183,7 +183,12 @@ impl BurningContract {
     }
 
     /// Redeem ACBU for proportional Afreum S-tokens across the basket (lower fee tier).
-    pub fn redeem_basket(env: Env, user: Address, recipient: Address, acbu_amount: i128) -> Vec<i128> {
+    pub fn redeem_basket(
+        env: Env,
+        user: Address,
+        recipient: Address,
+        acbu_amount: i128,
+    ) -> Vec<i128> {
         Self::check_paused(&env);
         user.require_auth();
 
@@ -221,8 +226,24 @@ impl BurningContract {
         );
 
         let mut amounts_out = Vec::new(&env);
+        let mut last_weighted_idx: Option<u32> = None;
+        for i in 0..currencies.len() {
+            let currency = currencies.get(i).unwrap();
+            let weight: i128 = env.invoke_contract(
+                &oracle_addr,
+                &Symbol::new(&env, "get_basket_weight"),
+                vec![&env, currency.into_val(&env)],
+            );
+            if weight > 0 {
+                last_weighted_idx = Some(i);
+            }
+        }
 
-        for currency in currencies.iter() {
+        let mut usd_allocated = 0i128;
+        let mut fee_allocated = 0i128;
+
+        for i in 0..currencies.len() {
+            let currency = currencies.get(i).unwrap();
             let weight: i128 = env.invoke_contract(
                 &oracle_addr,
                 &Symbol::new(&env, "get_basket_weight"),
@@ -248,10 +269,16 @@ impl BurningContract {
                 vec![&env, currency.clone().into_val(&env)],
             );
 
-            let usd_i = (weight * usd_total) / BASIS_POINTS;
+            let (usd_i, fee_i) = if Some(i) == last_weighted_idx {
+                (usd_total - usd_allocated, total_fee - fee_allocated)
+            } else {
+                let usd_i = (weight * usd_total) / BASIS_POINTS;
+                let fee_i = (weight * total_fee) / BASIS_POINTS;
+                usd_allocated += usd_i;
+                fee_allocated += fee_i;
+                (usd_i, fee_i)
+            };
             let native_i = (usd_i * DECIMALS) / rate;
-
-            let fee_i = (weight * total_fee) / BASIS_POINTS;
 
             if native_i > 0 {
                 let token = soroban_sdk::token::Client::new(&env, &stoken);
@@ -317,7 +344,10 @@ impl BurningContract {
     }
 
     pub fn get_fee_single_redeem(env: Env) -> i128 {
-        env.storage().instance().get(&DATA_KEY.fee_single_redeem).unwrap()
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.fee_single_redeem)
+            .unwrap()
     }
 
     pub fn is_paused(env: Env) -> bool {

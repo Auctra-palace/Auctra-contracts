@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol};
-
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol,
+};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,7 +20,6 @@ const DATA_KEY: DataKey = DataKey {
 };
 
 const VERSION: u32 = 1;
-
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -123,7 +123,7 @@ impl Escrow {
         Ok(())
     }
 
-    /// Release escrow: payee receives ACBU (caller must be admin or authorized)
+    /// Release escrow: payee receives ACBU (payer authorization required)
     /// caller must supply payer and escrow_id to identify which escrow to release
     pub fn release(env: Env, escrow_id: u64, payer: Address) -> Result<(), soroban_sdk::Error> {
         let paused: bool = env
@@ -135,20 +135,17 @@ impl Escrow {
             return Err(soroban_sdk::Error::from_contract_error(3001));
         }
 
-        // only admain can trigger release
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DATA_KEY.admin)
-            .expect("admin not set — contract not initialized");
-        admin.require_auth();
+        payer.require_auth();
 
         let key = EscrowId(payer.clone(), escrow_id);
-        let (_stored_payer, payee, amount): (Address, Address, i128) = env
+        let (stored_payer, payee, amount): (Address, Address, i128) = env
             .storage()
             .temporary()
             .get(&key)
             .ok_or(soroban_sdk::Error::from_contract_error(3003))?;
+        if stored_payer != payer {
+            return Err(soroban_sdk::Error::from_contract_error(3004));
+        }
 
         let acbu: Address = env
             .storage()
@@ -268,4 +265,3 @@ impl Escrow {
         env.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
-
