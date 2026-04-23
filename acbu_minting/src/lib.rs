@@ -5,8 +5,8 @@ use soroban_sdk::{
 };
 
 use shared::{
-    calculate_amount_after_fee, calculate_fee, CurrencyCode, MintEvent, BASIS_POINTS, DECIMALS,
-    MAX_MINT_AMOUNT, MIN_MINT_AMOUNT,
+    calculate_amount_after_fee, calculate_fee, CurrencyCode, MintEvent, BASIS_POINTS, CONTRACT_VERSION,
+    DECIMALS, DataKey as SharedDataKey, MAX_MINT_AMOUNT, MIN_MINT_AMOUNT,
 };
 
 mod shared {
@@ -45,7 +45,6 @@ pub struct DataKey {
     pub min_mint_amount: Symbol,
     pub max_mint_amount: Symbol,
     pub total_supply: Symbol,
-    pub version: Symbol,
     pub operator: Symbol,
     pub used_proofs: Symbol,
 }
@@ -64,39 +63,11 @@ const DATA_KEY: DataKey = DataKey {
     min_mint_amount: symbol_short!("MIN_MINT"),
     max_mint_amount: symbol_short!("MAX_MINT"),
     total_supply: symbol_short!("SUPPLY"),
-    version: symbol_short!("VERSION"),
     operator: symbol_short!("OPERTR"),
     used_proofs: symbol_short!("PRF_SET"),
 };
 
-const VERSION: u32 = 4;
-
-fn check_proof_unused(env: &Env, proof_id: &SorobanString) -> bool {
-    let used_proofs: soroban_sdk::Vec<SorobanString> = env
-        .storage()
-        .instance()
-        .get(&DATA_KEY.used_proofs)
-        .unwrap_or_else(|| soroban_sdk::Vec::new(env));
-
-    for i in 0..used_proofs.len() {
-        if used_proofs.get(i) == *proof_id {
-            return false;
-        }
-    }
-    true
-}
-
-fn mark_proof_used(env: &Env, proof_id: &SorobanString) {
-    let mut used_proofs: soroban_sdk::Vec<SorobanString> = env
-        .storage()
-        .instance()
-        .get(&DATA_KEY.used_proofs)
-        .unwrap_or_else(|| soroban_sdk::Vec::new(env));
-    used_proofs.push_back(proof_id.clone());
-    env.storage()
-        .instance()
-        .set(&DATA_KEY.used_proofs, &used_proofs);
-}
+// CONTRACT_VERSION is imported from shared
 
 #[contract]
 pub struct MintingContract;
@@ -154,7 +125,7 @@ impl MintingContract {
             .instance()
             .set(&DATA_KEY.max_mint_amount, &MAX_MINT_AMOUNT);
         env.storage().instance().set(&DATA_KEY.total_supply, &0i128);
-        env.storage().instance().set(&DATA_KEY.version, &VERSION);
+        env.storage().instance().set(&SharedDataKey::Version, &CONTRACT_VERSION);
     }
 
     /// Mint ACBU from USDC deposit (unchanged reserve/oracle flow).
@@ -711,26 +682,33 @@ impl MintingContract {
         }
     }
 
-    pub fn version(_env: Env) -> u32 {
-        VERSION
+    pub fn get_version(env: Env) -> u32 {
+        env.storage().instance().get(&SharedDataKey::Version).unwrap_or(0)
     }
 
-    pub fn migrate(env: Env) {
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>, new_version: u32) {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         admin.require_auth();
 
-        let current_version = VERSION;
-        let stored_version: u32 = env.storage().instance().get(&DATA_KEY.version).unwrap_or(0);
-        if stored_version < current_version {
-            env.storage()
-                .instance()
-                .set(&DATA_KEY.version, &current_version);
+        let current_version = Self::get_version(env.clone());
+        if new_version <= current_version {
+            panic!("Invalid version upgrade");
         }
-    }
 
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-        let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
-        admin.require_auth();
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+        // Run migrations
+        for v in current_version..new_version {
+            match v {
+                0 => migrate_v0_to_v1(env.clone()),
+                _ => {}
+            }
+        }
+
+        env.storage().instance().set(&SharedDataKey::Version, &new_version);
     }
+}
+
+fn migrate_v0_to_v1(_env: Env) {
+    // Migration logic
 }
