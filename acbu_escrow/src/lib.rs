@@ -31,6 +31,8 @@ pub struct EscrowDataKey {
     pub paused: Symbol,
     pub pending_upgrade: Symbol,
     pub pending_upgrade_eligible_at: Symbol,
+    pub pending_admin: Symbol,
+    pub pending_admin_eligible_at: Symbol,
 }
 
 const DATA_KEY: EscrowDataKey = EscrowDataKey {
@@ -39,9 +41,15 @@ const DATA_KEY: EscrowDataKey = EscrowDataKey {
     paused: symbol_short!("PAUSED"),
     pending_upgrade: symbol_short!("PEND_UPG"),
     pending_upgrade_eligible_at: symbol_short!("PU_ETA"),
+    pending_admin: symbol_short!("PEND_ADM"),
+    pending_admin_eligible_at: symbol_short!("PA_ETA"),
 };
 
 const UPGRADE_TIMELOCK_SECONDS: u64 = 86_400;
+/// Admin rotation timelock: the pending admin must wait this long before
+/// claiming ownership, giving the current admin a window to cancel a mistaken
+/// or malicious transfer.
+const ADMIN_TIMELOCK_SECONDS: u64 = 86_400;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -80,11 +88,16 @@ pub struct Escrow;
 
 #[contractimpl]
 impl Escrow {
-    fn get_admin(env: &Env) -> Result<Address, EscrowError> {
+    fn load_admin(env: &Env) -> Result<Address, EscrowError> {
         env.storage()
             .instance()
             .get(&DATA_KEY.admin)
             .ok_or(EscrowError::UninitializedAdmin)
+    }
+
+    /// Current admin address.
+    pub fn get_admin(env: Env) -> Result<Address, EscrowError> {
+        Self::load_admin(&env)
     }
 
     fn get_acbu_token(env: &Env) -> Result<Address, EscrowError> {
@@ -263,26 +276,117 @@ impl Escrow {
     }
 
     pub fn pause(env: Env) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         env.storage().instance().set(&DATA_KEY.paused, &true);
         Ok(())
     }
 
     pub fn unpause(env: Env) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         env.storage().instance().set(&DATA_KEY.paused, &false);
         Ok(())
     }
 
     pub fn update_acbu_token(env: Env, new_acbu_token: Address) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         env.storage()
             .instance()
             .set(&DATA_KEY.acbu_token, &new_acbu_token);
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Two-step admin rotation
+    //
+    // Current admin nominates a successor and starts a timelock; the successor
+    // must explicitly accept after the timelock elapses; the current admin may
+    // cancel a pending transfer at any time. Prevents a single lost or
+    // compromised key from leaving the contract permanently unmanageable.
+    // -----------------------------------------------------------------------
+
+    /// Step 1 — current admin nominates `new_admin` and starts the timelock.
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), EscrowError> {
+        let admin = Self::load_admin(&env)?;
+        admin.require_auth();
+        let eligible_at = env.ledger().timestamp() + ADMIN_TIMELOCK_SECONDS;
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.pending_admin, &new_admin);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.pending_admin_eligible_at, &eligible_at);
+        env.events().publish(
+            (symbol_short!("adm_init"),),
+            (admin, new_admin, eligible_at),
+        );
+        Ok(())
+    }
+
+    /// Step 2 — the nominated address claims ownership after the timelock.
+    pub fn accept_admin(env: Env) -> Result<(), EscrowError> {
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin)
+            .ok_or(EscrowError::NoPendingAdmin)?;
+        pending_admin.require_auth();
+
+        let eligible_at: u64 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin_eligible_at)
+            .unwrap_or(u64::MAX);
+        if env.ledger().timestamp() < eligible_at {
+            return Err(EscrowError::AdminTimelockNotElapsed);
+        }
+
+        let old_admin = Self::load_admin(&env)?;
+        env.storage().instance().set(&DATA_KEY.admin, &pending_admin);
+        env.storage().instance().remove(&DATA_KEY.pending_admin);
+        env.storage()
+            .instance()
+            .remove(&DATA_KEY.pending_admin_eligible_at);
+
+        env.events().publish(
+            (symbol_short!("adm_done"),),
+            (old_admin, pending_admin, env.ledger().timestamp()),
+        );
+        Ok(())
+    }
+
+    /// Cancel a pending transfer (current admin only).
+    pub fn cancel_admin_transfer(env: Env) -> Result<(), EscrowError> {
+        let admin = Self::load_admin(&env)?;
+        admin.require_auth();
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin)
+            .ok_or(EscrowError::NoPendingAdminToCancel)?;
+        env.storage().instance().remove(&DATA_KEY.pending_admin);
+        env.storage()
+            .instance()
+            .remove(&DATA_KEY.pending_admin_eligible_at);
+        env.events().publish(
+            (symbol_short!("adm_cncl"),),
+            (admin, pending_admin, env.ledger().timestamp()),
+        );
+        Ok(())
+    }
+
+    /// Pending successor, if a transfer is in progress.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DATA_KEY.pending_admin)
+    }
+
+    /// Timestamp after which `accept_admin` becomes callable.
+    pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin_eligible_at)
     }
 
     pub fn version(env: Env) -> u32 {
@@ -314,7 +418,7 @@ impl Escrow {
     }
 
     pub fn propose_upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         let eligible_at = env.ledger().timestamp() + UPGRADE_TIMELOCK_SECONDS;
         env.storage()
@@ -327,7 +431,7 @@ impl Escrow {
     }
 
     pub fn execute_upgrade(env: Env) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         let wasm_hash: BytesN<32> = env
             .storage()
@@ -351,7 +455,7 @@ impl Escrow {
     }
 
     pub fn cancel_upgrade(env: Env) -> Result<(), EscrowError> {
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
         env.storage().instance().remove(&DATA_KEY.pending_upgrade);
         env.storage()

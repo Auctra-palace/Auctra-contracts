@@ -64,6 +64,8 @@ pub struct DataKey {
     pub pending_upgrade_wasm: Symbol,
     pub pending_upgrade_version: Symbol,
     pub pending_upgrade_eligible_at: Symbol,
+    pub pending_admin: Symbol,
+    pub pending_admin_eligible_at: Symbol,
 }
 
 const DATA_KEY: DataKey = DataKey {
@@ -442,20 +444,25 @@ impl SavingsVault {
     pub fn pause(env: Env) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
-        env.storage().instance().set(&DATA_KEY.paused, &true);
+        let current_version: u32 = env.storage().instance().get(&SharedDataKey::Version).unwrap_or(0);
+        if new_version <= current_version { env.panic_with_error(Error::InvalidVersion); }
+        
+        env.storage().instance().set(&DATA_KEY.pending_upgrade_wasm, &new_wasm_hash);
+        env.storage().instance().set(&DATA_KEY.pending_upgrade_version, &new_version);
+        env.storage().instance().set(&DATA_KEY.pending_upgrade_eligible_at, &(env.ledger().timestamp() + UPGRADE_TIMELOCK_SECONDS));
     }
 
-    pub fn unpause(env: Env) {
-        let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
+    pub fn execute_upgrade(env: Env) {
+        let admin = Self::load_admin(&env).unwrap_or_else(|_| env.panic_with_error(Error::NoAdmin));
         admin.require_auth();
-        env.storage().instance().set(&DATA_KEY.paused, &false);
-    }
-
-    pub fn get_version(env: Env) -> u32 {
-        env.storage()
-            .instance()
-            .get(&SharedDataKey::Version)
-            .unwrap_or(0)
+        let wasm_hash: BytesN<32> = env.storage().instance().get(&DATA_KEY.pending_upgrade_wasm).unwrap_or_else(|| env.panic_with_error(Error::NoPendingUpgrade));
+        let new_version: u32 = env.storage().instance().get(&DATA_KEY.pending_upgrade_version).unwrap_or(0);
+        
+        env.deployer().update_current_contract_wasm(wasm_hash);
+        env.storage().instance().set(&SharedDataKey::Version, &new_version);
+        env.storage().instance().remove(&DATA_KEY.pending_upgrade_wasm);
+        env.storage().instance().remove(&DATA_KEY.pending_upgrade_version);
+        env.storage().instance().remove(&DATA_KEY.pending_upgrade_eligible_at);
     }
 
     pub fn update_acbu_token(env: Env, new_acbu_token: Address) {
@@ -541,19 +548,24 @@ impl SavingsVault {
     pub fn cancel_upgrade(env: Env) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin)
+            .unwrap_or_else(|| env.panic_with_error(Error::NoPendingAdminToCancel));
+        env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
-            .remove(&DATA_KEY.pending_upgrade_wasm);
-        env.storage()
-            .instance()
-            .remove(&DATA_KEY.pending_upgrade_version);
-        env.storage()
-            .instance()
-            .remove(&DATA_KEY.pending_upgrade_eligible_at);
+            .remove(&DATA_KEY.pending_admin_eligible_at);
+        env.events().publish(
+            (symbol_short!("adm_cncl"),),
+            (admin, pending_admin, env.ledger().timestamp()),
+        );
     }
 
-    fn migrate_v0_to_v1(_env: Env) {
-        // Migration logic
+    /// Current admin address.
+    pub fn get_admin(env: Env) -> Address {
+        env.storage().instance().get(&DATA_KEY.admin).unwrap()
     }
 
     fn migrate_v0_to_v1(_env: Env) {
@@ -587,16 +599,7 @@ impl SavingsVault {
         Ok(numerator / (BASIS_POINTS * SECONDS_PER_YEAR))
     }
 
-    fn calculate_yield(
-        principal: i128,
-        yield_rate_bps: i128,
-        elapsed_seconds: u64,
-    ) -> Result<i128, Error> {
-        let elapsed_i128 = i128::from(elapsed_seconds);
-        let numerator = principal
-            .checked_mul(yield_rate_bps)
-            .and_then(|v| v.checked_mul(elapsed_i128))
-            .ok_or(Error::Overflow)?;
-        Ok(numerator / (BASIS_POINTS * SECONDS_PER_YEAR))
+    fn load_admin(env: &Env) -> Result<Address, Error> {
+        env.storage().instance().get(&DATA_KEY.admin).ok_or(Error::NoAdmin)
     }
 }

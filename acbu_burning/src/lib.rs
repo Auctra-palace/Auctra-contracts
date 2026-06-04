@@ -18,10 +18,10 @@ use shared::{
 };
 
 use shared::{
-    calculate_fee, reentrancy_guard, BurnEvent, ContractError, CurrencyCode,
-    DataKey as SharedDataKey, BASIS_POINTS, CONTRACT_VERSION, DECIMALS, MIN_BURN_AMOUNT,
-    ORACLE_GET_ACBU_RATE_WITH_TS, ORACLE_GET_BASKET_WEIGHT, ORACLE_GET_CURRENCIES, ORACLE_GET_RATE,
-    ORACLE_GET_RATE_WITH_TS, ORACLE_GET_S_TOKEN_ADDR, UPDATE_INTERVAL_SECONDS,
+    calculate_fee, BurnEvent, ContractError, CurrencyCode, DataKey as SharedDataKey, BASIS_POINTS,
+    DECIMALS, MIN_BURN_AMOUNT,
+    ORACLE_GET_ACBU_RATE, ORACLE_GET_CURRENCIES, ORACLE_GET_BASKET_WEIGHT,
+    ORACLE_GET_RATE, ORACLE_GET_S_TOKEN_ADDR, UPDATE_INTERVAL_SECONDS,
 };
 
 #[contracttype]
@@ -37,6 +37,8 @@ pub struct DataKey {
     pub fee_single_redeem: Symbol,
     pub paused: Symbol,
     pub min_burn_amount: Symbol,
+    pub pending_admin: Symbol,
+    pub pending_admin_eligible_at: Symbol,
 }
 
 const DATA_KEY: DataKey = DataKey {
@@ -50,6 +52,8 @@ const DATA_KEY: DataKey = DataKey {
     fee_single_redeem: symbol_short!("FEE_S_R"),
     paused: symbol_short!("PAUSED"),
     min_burn_amount: symbol_short!("MIN_BURN"),
+    pending_admin: symbol_short!("PEND_ADM"),
+    pending_admin_eligible_at: symbol_short!("PEND_ETA"),
 };
 
 // CONTRACT_VERSION is imported from shared
@@ -674,83 +678,97 @@ impl BurningContract {
         amounts_out
     }
 
-    /// Pause the contract (admin only)
-    pub fn pause(env: Env) {
+    // -----------------------------------------------------------------------
+    // Two-step admin rotation
+    //
+    // Current admin nominates a successor and starts a timelock; the successor
+    // must explicitly accept after the timelock elapses; the current admin may
+    // cancel a pending transfer at any time. Prevents a single lost or
+    // compromised key from leaving the contract permanently unmanageable.
+    // -----------------------------------------------------------------------
+
+    /// Step 1 — current admin nominates `new_admin` and starts the timelock.
+    pub fn transfer_admin(env: Env, new_admin: Address) {
         Self::check_admin(&env);
-        env.storage().instance().set(&DATA_KEY.paused, &true);
+        let eligible_at = env.ledger().timestamp() + ADMIN_TIMELOCK_SECONDS;
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.pending_admin, &new_admin);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.pending_admin_eligible_at, &eligible_at);
+        let current_admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
+        env.events().publish(
+            (symbol_short!("adm_init"),),
+            (current_admin, new_admin, eligible_at),
+        );
     }
 
-    /// Unpause the contract (admin only)
-    pub fn unpause(env: Env) {
-        Self::check_admin(&env);
-        env.storage().instance().set(&DATA_KEY.paused, &false);
-    }
+    /// Step 2 — the nominated address claims ownership after the timelock.
+    pub fn accept_admin(env: Env) {
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin)
+            .unwrap_or_else(|| env.panic_with_error(ContractError::NoPendingAdmin));
+        pending_admin.require_auth();
 
-    /// Set basket redemption fee (admin only)
-    pub fn set_fee_rate(env: Env, fee_rate_bps: i128) {
-        Self::check_admin(&env);
-        Self::check_paused(&env);
-        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
-            env.panic_with_error(ContractError::InvalidRate);
+        let eligible_at: u64 = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin_eligible_at)
+            .unwrap_or(u64::MAX);
+        if env.ledger().timestamp() < eligible_at {
+            env.panic_with_error(ContractError::AdminTimelockNotElapsed);
         }
+
+        let old_admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
+        env.storage().instance().set(&DATA_KEY.admin, &pending_admin);
+        env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
-            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
+            .remove(&DATA_KEY.pending_admin_eligible_at);
+
+        env.events().publish(
+            (symbol_short!("adm_done"),),
+            (old_admin, pending_admin, env.ledger().timestamp()),
+        );
     }
 
-    pub fn set_fee_single_redeem(env: Env, fee_bps: i128) {
+    /// Cancel a pending transfer (current admin only).
+    pub fn cancel_admin_transfer(env: Env) {
         Self::check_admin(&env);
-        Self::check_paused(&env);
-        if !(0..=BASIS_POINTS).contains(&fee_bps) {
-            env.panic_with_error(ContractError::InvalidRate);
-        }
+        let pending_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin)
+            .unwrap_or_else(|| env.panic_with_error(ContractError::NoPendingAdminToCancel));
+        env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
-            .set(&DATA_KEY.fee_single_redeem, &fee_bps);
+            .remove(&DATA_KEY.pending_admin_eligible_at);
+        let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
+        env.events().publish(
+            (symbol_short!("adm_cncl"),),
+            (admin, pending_admin, env.ledger().timestamp()),
+        );
     }
 
-    pub fn get_fee_rate(env: Env) -> i128 {
-        env.storage().instance().get(&DATA_KEY.fee_rate).unwrap()
+    /// Current admin address.
+    pub fn get_admin(env: Env) -> Address {
+        env.storage().instance().get(&DATA_KEY.admin).unwrap()
     }
 
-    pub fn get_fee_single_redeem(env: Env) -> i128 {
+    /// Pending successor, if a transfer is in progress.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DATA_KEY.pending_admin)
+    }
+
+    /// Timestamp after which `accept_admin` becomes callable.
+    pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
         env.storage()
             .instance()
-            .get(&DATA_KEY.fee_single_redeem)
-            .unwrap()
-    }
-
-    pub fn is_paused(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DATA_KEY.paused)
-            .unwrap_or(false)
-    }
-
-    // ── Dependency address updaters (admin only) ──────────────────────────
-
-    pub fn update_oracle(env: Env, new_oracle: Address) {
-        Self::check_admin(&env);
-        env.storage().instance().set(&DATA_KEY.oracle, &new_oracle);
-    }
-
-    pub fn update_reserve_tracker(env: Env, new_reserve_tracker: Address) {
-        Self::check_admin(&env);
-        env.storage()
-            .instance()
-            .set(&DATA_KEY.reserve_tracker, &new_reserve_tracker);
-    }
-
-    pub fn update_acbu_token(env: Env, new_acbu_token: Address) {
-        Self::check_admin(&env);
-        env.storage()
-            .instance()
-            .set(&DATA_KEY.acbu_token, &new_acbu_token);
-    }
-
-    pub fn update_vault(env: Env, new_vault: Address) {
-        Self::check_admin(&env);
-        env.storage().instance().set(&DATA_KEY.vault, &new_vault);
+            .get(&DATA_KEY.pending_admin_eligible_at)
     }
 
     fn check_paused(env: &Env) {
