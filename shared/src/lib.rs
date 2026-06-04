@@ -80,16 +80,25 @@ pub struct ProposalExecutedEvent {
 
 pub const CONTRACT_VERSION: u32 = 1;
 
-/// Currency code type (e.g., "NGN", "KES", "RWF")
+/// Currency code type (e.g., "NGN", "KES", "RWF").
+///
+/// A currency code is logically a single short string. It is stored as one
+/// [`SorobanString`] rather than a `Vec<SorobanString>` so that constructing,
+/// cloning, comparing, and using it as a `Map` key does not allocate a
+/// temporary host `Vec` object per call — which previously inflated both gas
+/// usage and compiled WASM size.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CurrencyCode(pub Vec<SorobanString>);
+pub struct CurrencyCode(pub SorobanString);
 
 impl CurrencyCode {
     pub fn new(env: &soroban_sdk::Env, code: &str) -> Self {
-        let mut v = Vec::new(env);
-        v.push_back(SorobanString::from_str(env, code));
-        CurrencyCode(v)
+        CurrencyCode(SorobanString::from_str(env, code))
+    }
+
+    /// Borrow the underlying currency code string (e.g. `"NGN"`).
+    pub fn code(&self) -> &SorobanString {
+        &self.0
     }
 }
 
