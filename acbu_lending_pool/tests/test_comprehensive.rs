@@ -167,7 +167,7 @@ fn test_borrow_creates_loan() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     let loan = client.get_loan(&borrower, &loan_id).expect("loan should exist");
     assert_eq!(loan.amount, borrow_amount);
@@ -191,7 +191,7 @@ fn test_borrow_transfers_tokens_to_borrower() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &1u64);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &1u64);
 
     assert_eq!(token_client.balance(&borrower), borrow_amount);
 }
@@ -210,7 +210,7 @@ fn test_borrow_exceeds_pool_liquidity_fails() {
 
     client.deposit(&lender, &pool_liquidity);
 
-    let result = client.try_borrow(&borrower, &borrow_amount, &0, &1u64);
+    let result = client.try_borrow(&borrower, &lender, &borrow_amount, &0, &1u64);
     assert!(result.is_err());
 }
 
@@ -219,7 +219,8 @@ fn test_borrow_zero_amount_fails() {
     let (env, client, _contract_id, _admin, _acbu_token) = setup();
 
     let borrower = Address::generate(&env);
-    let result = client.try_borrow(&borrower, &0, &0, &1u64);
+    let lender = Address::generate(&env);
+    let result = client.try_borrow(&borrower, &lender, &0, &0, &1u64);
 
     assert!(result.is_err());
 }
@@ -240,9 +241,9 @@ fn test_borrow_duplicate_loan_id_fails() {
     token_admin.mint(&borrower, &(collateral * 2));
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
-    let result = client.try_borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    let result = client.try_borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     assert!(result.is_err());
 }
 
@@ -262,7 +263,7 @@ fn test_borrow_emits_event() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     let events = env.events().all();
     let borrow_event = events
@@ -309,7 +310,7 @@ fn test_repay_partial_reduces_loan_amount() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     client.repay(&borrower, &repay_amount, &loan_id);
 
     let loan = client.get_loan(&borrower, &loan_id).expect("loan should still exist");
@@ -332,7 +333,7 @@ fn test_repay_full_removes_loan() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     client.repay(&borrower, &borrow_amount, &loan_id);
 
     assert!(client.get_loan(&borrower, &loan_id).is_none());
@@ -357,7 +358,7 @@ fn test_repay_full_returns_collateral() {
     client.deposit(&lender, &pool_liquidity);
     
     let borrower_balance_before = token_client.balance(&borrower);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     
     // After borrow: borrower has borrow_amount (collateral was transferred to contract)
     assert_eq!(token_client.balance(&borrower), borrow_amount);
@@ -384,7 +385,7 @@ fn test_repay_more_than_loan_amount_fails() {
     token_admin.mint(&borrower, &(collateral + borrow_amount));
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     let result = client.try_repay(&borrower, &(borrow_amount + 1), &loan_id);
     assert!(result.is_err());
@@ -416,7 +417,7 @@ fn test_repay_zero_amount_fails() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     let result = client.try_repay(&borrower, &0, &loan_id);
     assert!(result.is_err());
@@ -439,7 +440,7 @@ fn test_repay_emits_event() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     client.repay(&borrower, &repay_amount, &loan_id);
 
     let events = env.events().all();
@@ -506,7 +507,8 @@ fn test_borrow_when_paused_fails() {
     client.pause();
 
     let borrower = Address::generate(&env);
-    let result = client.try_borrow(&borrower, &1000, &0, &1u64);
+    let lender = Address::generate(&env);
+    let result = client.try_borrow(&borrower, &lender, &1000, &0, &1u64);
 
     assert!(result.is_err());
 }
@@ -527,7 +529,7 @@ fn test_repay_when_paused_fails() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     
     client.pause();
 
@@ -573,7 +575,7 @@ fn test_borrow_insufficient_collateral_fails() {
 
     client.deposit(&lender, &pool_liquidity);
 
-    let result = client.try_borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    let result = client.try_borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
     assert!(result.is_err());
 }
 
@@ -597,9 +599,9 @@ fn test_multiple_borrowers_same_lender() {
     client.deposit(&lender, &pool_liquidity);
 
     // First borrower
-    client.borrow(&borrower1, &borrow_amount, &collateral, &1u64);
+    client.borrow(&borrower1, &lender, &borrow_amount, &collateral, &1u64);
     // Second borrower
-    client.borrow(&borrower2, &borrow_amount, &collateral, &2u64);
+    client.borrow(&borrower2, &lender, &borrow_amount, &collateral, &2u64);
 
     // Both loans should exist
     let loan1 = client.get_loan(&borrower1, &1u64).expect("loan1 should exist");
@@ -657,7 +659,7 @@ fn test_repay_interest_accrual() {
     token_admin.mint(&borrower, &collateral);
 
     client.deposit(&lender, &pool_liquidity);
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     // Advance time to accrue interest
     env.ledger().set_timestamp(env.ledger().timestamp() + 30 * 24 * 60 * 60);
@@ -683,6 +685,6 @@ fn test_borrow_negative_collateral_fails() {
 
     client.deposit(&lender, &pool_liquidity);
 
-    let result = client.try_borrow(&borrower, &borrow_amount, &-100, &1u64);
+    let result = client.try_borrow(&borrower, &lender, &borrow_amount, &-100, &1u64);
     assert!(result.is_err());
 }
