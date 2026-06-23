@@ -201,7 +201,7 @@ fn test_borrow_basic() {
     token_admin.mint(&borrower, &collateral);
 
     // (contract transfers ACBU *out* to borrower; collateral is recorded but not transferred in MVP)
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     // Loan is recorded with correct fields
     let loan = client
@@ -250,7 +250,7 @@ fn test_fee_rate_accrues_into_repayment_due() {
     token_admin.mint(&borrower, &(collateral + borrow_amount));
 
     let loan_id = 226u64;
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     let elapsed = 365u64 * 24 * 60 * 60 / 2;
     env.ledger().with_mut(|l| l.timestamp += elapsed);
@@ -292,7 +292,7 @@ fn test_repay_basic() {
     let borrower = Address::generate(&env);
     let borrow_amount: i128 = 300_000;
     let loan_id: u64 = 7;
-    client.borrow(&borrower, &borrow_amount, &0, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &0, &loan_id);
 
     // Borrower now holds borrow_amount tokens; repay the full amount
     client.repay(&borrower, &borrow_amount, &loan_id);
@@ -336,7 +336,7 @@ fn test_borrow_exceeds_liquidity_fails() {
     // Attempt to borrow more than what is in the pool
     let borrower = Address::generate(&env);
     let over_amount: i128 = small_liquidity + 1;
-    let result = client.try_borrow(&borrower, &over_amount, &0, &1u64);
+    let result = client.try_borrow(&borrower, &lender, &over_amount, &0, &1u64);
 
     assert!(
         result.is_err(),
@@ -369,7 +369,7 @@ fn test_repay_wrong_loan_id_fails() {
     let borrower = Address::generate(&env);
     let borrow_amount: i128 = 100_000;
     let real_loan_id: u64 = 42;
-    client.borrow(&borrower, &borrow_amount, &0, &real_loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &0, &real_loan_id);
 
     // Attempt to repay using a different loan_id
     let wrong_loan_id: u64 = 99;
@@ -413,7 +413,7 @@ fn test_loan_default_scenario() {
     let borrower = Address::generate(&env);
     let borrow_amount: i128 = 200_000;
     let loan_id: u64 = 55;
-    client.borrow(&borrower, &borrow_amount, &0, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &0, &loan_id);
 
     // Borrower never repays — loan remains open.
     // No liquidation function exists yet; assert the loan is still present and overdue.
@@ -462,7 +462,7 @@ fn test_borrow_repay_full_lifecycle() {
     let borrower = Address::generate(&env);
     let borrow_amount: i128 = 600_000;
     let loan_id: u64 = 100;
-    client.borrow(&borrower, &borrow_amount, &0, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &0, &loan_id);
 
     assert_eq!(token_client.balance(&borrower), borrow_amount);
     assert_eq!(
@@ -527,7 +527,7 @@ fn test_loan_lifecycle_emits_events() {
     let borrow_amount = 300_000i128;
 
     // 1. Borrow - verify state transition + event
-    client.borrow(&borrower, &borrow_amount, &collateral, &loan_id);
+    client.borrow(&borrower, &lender, &borrow_amount, &collateral, &loan_id);
 
     // Assert loan state created
     let loan = client.get_loan(&borrower, &loan_id).unwrap();

@@ -14,6 +14,7 @@ pub enum DataKey {
     FeeRate,
     Paused,
     Balance(Address),
+    Borrowed(Address), // Tracks total amount borrowed from each lender
     Loan(LoanId),
     ActiveLoansLiquidity, // Tracks total amount currently loaned out
     LenderBalances,
@@ -39,6 +40,7 @@ pub struct LoanId(pub Address, pub u64);
 #[derive(Clone, Debug)]
 pub struct LoanData {
     pub borrower: Address,
+    pub lender: Address,
     pub amount: i128,
     pub collateral_amount: i128,
     pub interest_rate_bps: u32,
@@ -203,26 +205,17 @@ impl LendingPool {
             .persistent()
             .get(&DataKey::Balance(lender.clone()))
             .unwrap_or(0);
-        if current_balance < amount {
+        
+        let already_borrowed: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Borrowed(lender.clone()))
+            .unwrap_or(0);
+            
+        let available_balance = current_balance.checked_sub(already_borrowed).unwrap_or(0);
+        if available_balance < amount {
             env.panic_with_error(Error::InsufficientBalance);
         }
-
-        // Available liquid reserves check
-        let active_loans_liquidity: i128 = env.storage().instance().get(&DataKey::ActiveLoansLiquidity).unwrap_or(0);
-        
-        let acbu_token: Address = env.storage().instance().get(&DataKey::AcbuToken).unwrap();
-        let token = soroban_sdk::token::Client::new(&env, &acbu_token);
-        let contract_balance = token.balance(&env.current_contract_address());
-
-        // ensure we don't withdraw collateral or loaned out funds
-        // The contract balance must remain at least active_loans_liquidity
-        // (plus any locked collateral, but locked collateral isn't part of withdrawable liquidity anyway)
-        // Wait, available liquidity = contract_balance - active_loans_liquidity
-        // No, available_liquidity = total_deposits - active_loans_liquidity.
-        // It's safer to just check available liquidity.
-        // Let's assume the contract balance tracks all deposited + collateral.
-        // If we just check `contract_balance - active_loans_liquidity`, we might accidentally let them withdraw collateral.
-        // To be perfectly safe, we should track total_deposits explicitly, or just ensure `amount <= total_deposits - active_loans_liquidity`.
 
         // CEI: Update state before external calls
         let new_balance = current_balance
@@ -232,6 +225,8 @@ impl LendingPool {
             .persistent()
             .set(&DataKey::Balance(lender.clone()), &new_balance);
 
+        let acbu_token: Address = env.storage().instance().get(&DataKey::AcbuToken).unwrap();
+        let token = soroban_sdk::token::Client::new(&env, &acbu_token);
         token.transfer(&env.current_contract_address(), &lender, &amount);
 
         env.events()
@@ -244,6 +239,7 @@ impl LendingPool {
     pub fn borrow(
         env: Env,
         borrower: Address,
+        lender: Address,
         amount: i128,
         collateral_amount: i128,
         loan_id: u64,
@@ -263,6 +259,21 @@ impl LendingPool {
             env.panic_with_error(Error::InsufficientCollateral);
         }
 
+        let lender_balance: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Balance(lender.clone()))
+            .unwrap_or(0);
+        let already_borrowed: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Borrowed(lender.clone()))
+            .unwrap_or(0);
+        let unborrowed_balance = lender_balance.checked_sub(already_borrowed).unwrap_or(0);
+        if unborrowed_balance < amount {
+            env.panic_with_error(Error::InsufficientBalance);
+        }
+
         let loan_key = LoanId(borrower.clone(), loan_id);
         if env.storage().persistent().has(&DataKey::Loan(loan_key.clone())) {
             env.panic_with_error(Error::InvalidState);
@@ -280,6 +291,13 @@ impl LendingPool {
         let active_loans_liquidity: i128 = env.storage().instance().get(&DataKey::ActiveLoansLiquidity).unwrap_or(0);
         env.storage().instance().set(&DataKey::ActiveLoansLiquidity, &(active_loans_liquidity + amount));
 
+        let new_borrowed = already_borrowed
+            .checked_add(amount)
+            .unwrap_or_else(|| env.panic_with_error(Error::InvalidAmount));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Borrowed(lender.clone()), &new_borrowed);
+
         // Pull collateral in BEFORE paying out the loan principal.
         token.transfer(&borrower, &env.current_contract_address(), &collateral_amount);
         token.transfer(&env.current_contract_address(), &borrower, &amount);
@@ -289,6 +307,7 @@ impl LendingPool {
         
         let loan_data = LoanData {
             borrower: borrower.clone(),
+            lender: lender.clone(),
             amount,
             collateral_amount,
             interest_rate_bps: fee_rate_bps as u32,
@@ -323,7 +342,7 @@ impl LendingPool {
             (symbol_short!("loan_cr"),),
             LoanCreatedEvent {
                 loan_id,
-                lender: env.current_contract_address(),
+                lender,
                 borrower,
                 amount,
                 interest_bps: fee_rate,
@@ -394,6 +413,19 @@ impl LendingPool {
 
         let active_loans_liquidity: i128 = env.storage().instance().get(&DataKey::ActiveLoansLiquidity).unwrap_or(0);
         env.storage().instance().set(&DataKey::ActiveLoansLiquidity, &active_loans_liquidity.checked_sub(principal_repaid).unwrap_or(0));
+
+        if principal_repaid > 0 {
+            let lender = loan_data.lender.clone();
+            let already_borrowed: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Borrowed(lender.clone()))
+                .unwrap_or(0);
+            let new_borrowed = already_borrowed.checked_sub(principal_repaid).unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Borrowed(lender), &new_borrowed);
+        }
 
         token.transfer(&borrower, &env.current_contract_address(), &amount);
 
