@@ -148,6 +148,8 @@ impl ReserveTrackerContract {
 
     /// Get current reserves for all currencies
     pub fn get_all_reserves(env: Env) -> Map<CurrencyCode, ReserveData> {
+        let key = &DATA_KEY.reserves;
+        env.storage().instance().extend_ttl(key, 5184000, 5184000);
         env.storage()
             .instance()
             .get(&DATA_KEY.reserves)
@@ -155,6 +157,15 @@ impl ReserveTrackerContract {
     }
 
     /// Check if the total reserves are sufficient to back the ACBU supply
+    pub fn total_reserves(env: Env) -> i128 {
+        let reserves = Self::get_all_reserves(env.clone());
+        let mut total_usd = 0i128;
+        for (_curr, data) in reserves.iter() {
+            total_usd = total_usd.checked_add(data.value_usd).expect("Overflow");
+        }
+        total_usd
+    }
+
     pub fn is_reserve_sufficient(env: Env, total_acbu_supply: i128) -> bool {
         if total_acbu_supply <= 0 {
             return true;
