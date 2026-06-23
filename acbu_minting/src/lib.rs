@@ -793,7 +793,6 @@ impl MintingContract {
         // ACBU at an incorrect price.
         let (acbu_rate, acbu_oracle_timestamp): (i128, u64) = env.invoke_contract(
             &oracle_addr,
-            &Symbol::new(&env, "get_acbu_usd_rate_with_timestamp"),
             &Symbol::new(&env, ORACLE_GET_ACBU_RATE_WITH_TS),
             vec![&env],
         );
@@ -801,7 +800,6 @@ impl MintingContract {
 
         let (rate, rate_timestamp): (i128, u64) = env.invoke_contract(
             &oracle_addr,
-            &Symbol::new(&env, "get_rate_with_timestamp"),
             &Symbol::new(&env, ORACLE_GET_RATE_WITH_TS),
             vec![&env, currency.clone().into_val(&env)],
         );
@@ -829,9 +827,6 @@ impl MintingContract {
             .checked_add(acbu_amount)
             .expect("Overflow in projected supply calculation");
         Self::check_supply_cap(&env, projected_supply);
-        let reserve_ok: bool = env.invoke_contract(
-            &reserve_tracker_addr,
-            &Symbol::new(&env, "is_reserve_sufficient"),
         let reserve_ok: bool = env.invoke_contract(
             &reserve_tracker_addr,
             &Symbol::new(&env, RESERVE_IS_SUFFICIENT),
