@@ -64,6 +64,15 @@ After deployment, contract addresses are saved to `.soroban/deployment_{network}
 
 ## Development
 
+### Git Hooks Setup
+
+After cloning, run:
+```bash
+./scripts/setup-git-hooks.sh
+```
+This configures the pre-commit hook for WASM integrity checks.
+
+
 ### Project Structure
 
 ```
