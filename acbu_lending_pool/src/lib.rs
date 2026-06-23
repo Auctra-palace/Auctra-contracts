@@ -112,6 +112,9 @@ pub enum Error {
     InvalidVersion = 2002,
     TimelockNotElapsed = 2003,
     NoPendingUpgrade = 2004,
+    NoPendingAdmin = 2005,
+    AdminTimelockNotElapsed = 2006,
+    NoPendingAdminToCancel = 2007,
     Unknown = 2999,
 }
 
@@ -548,6 +551,47 @@ impl LendingPool {
             .persistent()
             .get(&DataKey::Balance(lender))
             .unwrap_or(0)
+    }
+
+    /// Returns the current annualized loan interest rate in basis points.
+    pub fn get_interest_rate(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeRate)
+            .unwrap_or(0)
+    }
+
+    /// Update the annualized loan interest rate in basis points.
+    ///
+    /// This is a high-privilege operation — changing the interest rate affects
+    /// all lenders and borrowers. Access is therefore restricted to the **admin**
+    /// only. Operators (who handle day-to-day minting) must NOT be able to call
+    /// this function; a compromised operator key must not be able to set
+    /// exorbitant rates. See issue #339.
+    pub fn set_interest_rate(env: Env, new_rate_bps: i128) {
+        // Admin-only: explicitly fetches and requires auth from the stored admin
+        // address. This is identical to check_admin but inlined here to make the
+        // privilege boundary visible at the call site.
+        Self::check_admin(&env);
+
+        if new_rate_bps < 0 || new_rate_bps > BASIS_POINTS {
+            env.panic_with_error(Error::InvalidAmount);
+        }
+
+        let old_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeRate)
+            .unwrap_or(0);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRate, &new_rate_bps);
+
+        env.events().publish(
+            (symbol_short!("rate_set"),),
+            (old_rate, new_rate_bps),
+        );
     }
 
     // -----------------------------------------------------------------------
