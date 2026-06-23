@@ -19,6 +19,11 @@ mod shared {
 pub enum ReserveTrackerError {
     AlreadyInitialized = 8001,
     InvalidVersion = 8002,
+    ZeroSupply = 8003,
+    NoPendingAdmin = 8004,
+    AdminTimelockNotElapsed = 8005,
+    NoPendingAdminToCancel = 8006,
+    Unauthorized = 8007,
     Unknown = 8999,
 }
 
@@ -116,13 +121,17 @@ impl ReserveTrackerContract {
     /// Update reserve amount for a currency (admin or authorized address)
     pub fn update_reserve(
         env: Env,
-        _updater: Address,
+        updater: Address,
         currency: CurrencyCode,
         amount: i128,
         value_usd: i128,
     ) {
-        // Authorize admin
-        Self::check_admin(&env);
+        // Authorize updater
+        updater.require_auth();
+        let admin = Self::get_admin(env.clone());
+        if updater != admin {
+            env.panic_with_error(ReserveTrackerError::Unauthorized);
+        }
 
         let current_time = env.ledger().timestamp();
 
@@ -148,8 +157,7 @@ impl ReserveTrackerContract {
 
     /// Get current reserves for all currencies
     pub fn get_all_reserves(env: Env) -> Map<CurrencyCode, ReserveData> {
-        let key = &DATA_KEY.reserves;
-        env.storage().instance().extend_ttl(key, 5184000, 5184000);
+        env.storage().instance().extend_ttl(5184000, 5184000);
         env.storage()
             .instance()
             .get(&DATA_KEY.reserves)
@@ -309,7 +317,9 @@ impl ReserveTrackerContract {
         }
 
         let old_admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
-        env.storage().instance().set(&DATA_KEY.admin, &pending_admin);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.admin, &pending_admin);
         env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
