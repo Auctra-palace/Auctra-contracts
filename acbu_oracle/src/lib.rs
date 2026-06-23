@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Map, Symbol, Vec,
 };
 
 use shared::{
@@ -142,6 +142,8 @@ pub struct ValidatorSignature {
     pub validator: Address,
     pub timestamp: u64,
 }
+
+contractmeta!(key = "version", val = "9");
 
 #[contract]
 pub struct OracleContract;

@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, IntoVal,
-    String as SorobanString, Symbol, Vec,
+    contract, contractimpl, contractmeta, contracttype, symbol_short, vec, Address, BytesN, Env,
+    IntoVal, String as SorobanString, Symbol, Vec,
 };
 
 use shared::{
@@ -57,6 +57,8 @@ const DATA_KEY: DataKey = DataKey {
 };
 
 // CONTRACT_VERSION is imported from shared
+
+contractmeta!(key = "version", val = "1");
 
 #[contract]
 pub struct BurningContract;

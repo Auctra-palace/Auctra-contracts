@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Symbol, Vec,
 };
 
 use shared::{calculate_fee, DataKey as SharedDataKey, reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION};
@@ -12,8 +12,8 @@ mod shared {
 
 // --- Definitions (These were missing, now included here) ---
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Symbol, Vec,
 };
 
 use shared::{calculate_fee, DataKey as SharedDataKey, reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION};
@@ -119,6 +119,8 @@ pub struct WithdrawEvent {
 // ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
+contractmeta!(key = "version", val = "1");
+
 #[contract]
 pub struct SavingsVault;
 
