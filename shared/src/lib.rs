@@ -2,6 +2,8 @@
 
 use soroban_sdk::{contracterror, contracttype, Address, String as SorobanString, Vec};
 
+pub mod reentrancy_guard;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -78,16 +80,25 @@ pub struct ProposalExecutedEvent {
 
 pub const CONTRACT_VERSION: u32 = 1;
 
-/// Currency code type (e.g., "NGN", "KES", "RWF")
+/// Currency code type (e.g., "NGN", "KES", "RWF").
+///
+/// A currency code is logically a single short string. It is stored as one
+/// [`SorobanString`] rather than a `Vec<SorobanString>` so that constructing,
+/// cloning, comparing, and using it as a `Map` key does not allocate a
+/// temporary host `Vec` object per call — which previously inflated both gas
+/// usage and compiled WASM size.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CurrencyCode(pub Vec<SorobanString>);
+pub struct CurrencyCode(pub SorobanString);
 
 impl CurrencyCode {
     pub fn new(env: &soroban_sdk::Env, code: &str) -> Self {
-        let mut v = Vec::new(env);
-        v.push_back(SorobanString::from_str(env, code));
-        CurrencyCode(v)
+        CurrencyCode(SorobanString::from_str(env, code))
+    }
+
+    /// Borrow the underlying currency code string (e.g. `"NGN"`).
+    pub fn code(&self) -> &SorobanString {
+        &self.0
     }
 }
 
@@ -213,6 +224,7 @@ pub enum ContractError {
     InvalidRecipient = 11,
     /// WASM upgrade rejected: `new_version` must be greater than the stored version.
     InvalidVersion = 12,
+    Unknown = 9999,
 }
 
 /// Cross-contract method name constants — prevents silent logic splits from typos
@@ -231,6 +243,7 @@ pub const BASIS_POINTS: i128 = 10_000;
 pub const DECIMALS: i128 = 10_000_000; // 7 decimals
 pub const MIN_MINT_AMOUNT: i128 = 10_000_000; // 10 USDC (7 decimals)
 pub const MAX_MINT_AMOUNT: i128 = 1_000_000_000_000; // 1M USDC (7 decimals)
+pub const MAX_TOTAL_SUPPLY: i128 = 1_000_000_000_0_000_000; // 1 billion ACBU (7 decimals)
 pub const MIN_BURN_AMOUNT: i128 = 10_000_000; // 10 ACBU (7 decimals)
 pub const UPDATE_INTERVAL_SECONDS: u64 = 21_600; // 6 hours
 pub const EMERGENCY_THRESHOLD_BPS: i128 = 500; // 5% deviation threshold
