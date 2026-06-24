@@ -897,14 +897,27 @@ impl MintingContract {
 
     /// Testnet / ops: transfer demo basket S-token from custodial balance on this contract to
     /// `recipient` (e.g. user faucet). Admin only; caps per call to limit abuse.
+    ///
+    /// FIX(#327): This is an admin-only entry point, fully isolated from
+    /// `mint_from_fiat`. It requires admin auth (not operator auth), enforces
+    /// the reentrancy guard and paused check, and does NOT mint ACBU — it only
+    /// moves pre-funded demo S-tokens from custody to a recipient.
     pub fn admin_drip_demo_fiat(
         env: Env,
         recipient: Address,
         currency: CurrencyCode,
         amount: i128,
     ) {
+        reentrancy_guard::acquire_guard(&env);
+        Self::check_paused(&env);
+
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         admin.require_auth();
+
+        if !Self::check_is_admin(&env, &admin) {
+            env.panic_with_error(MintingError::UnauthorizedOperator);
+        }
+
         // C-058: reject contract-type recipients to prevent stranded token transfers.
         Self::assert_recipient_is_account(&recipient);
         if amount <= 0 {
@@ -928,6 +941,8 @@ impl MintingContract {
             env.panic_with_error(MintingError::InsufficientDemoCustody);
         }
         token.transfer(&custody, &recipient, &amount);
+
+        reentrancy_guard::release_guard(&env);
     }
 
     /// General fiat mint: User/fintech provides fintech_tx_id; operator/backend signs.

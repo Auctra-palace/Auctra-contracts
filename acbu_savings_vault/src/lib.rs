@@ -221,6 +221,13 @@ impl SavingsVault {
         if term_seconds == 0 {
             env.panic_with_error(Error::InvalidTerm);
         }
+        // FIX(#328): Validate that term_seconds won't overflow when added to
+        // the current ledger timestamp. All term comparisons stay in u64 space
+        // to avoid unintended sign behavior from u64→i128 casts.
+        let now = env.ledger().timestamp();
+        if term_seconds > u64::MAX - now {
+            env.panic_with_error(Error::InvalidTerm);
+        }
 
         // Load fee_rate and calculate fee before transfer.
         let fee_rate = Self::load_fee_rate(&env).unwrap_or_else(|e| env.panic_with_error(e));
@@ -588,17 +595,27 @@ impl SavingsVault {
         total
     }
 
+    // FIX(#328): Use explicit i128::from() for u64→i128 conversion of
+    // elapsed_seconds to avoid any unintended sign behavior. Guard against
+    // zero divisor and zero inputs for safety.
     fn calculate_yield(
         principal: i128,
         yield_rate_bps: i128,
         elapsed_seconds: u64,
     ) -> Result<i128, Error> {
-        let elapsed_i128 = i128::from(elapsed_seconds);
+        if principal == 0 || yield_rate_bps == 0 || elapsed_seconds == 0 {
+            return Ok(0);
+        }
+        let elapsed_i128: i128 = i128::from(elapsed_seconds);
+        let divisor = BASIS_POINTS.checked_mul(SECONDS_PER_YEAR).ok_or(Error::Overflow)?;
+        if divisor == 0 {
+            return Err(Error::Overflow);
+        }
         let numerator = principal
             .checked_mul(yield_rate_bps)
             .and_then(|v| v.checked_mul(elapsed_i128))
             .ok_or(Error::Overflow)?;
-        Ok(numerator / (BASIS_POINTS * SECONDS_PER_YEAR))
+        numerator.checked_div(divisor).ok_or(Error::Overflow)
     }
 
     fn load_admin(env: &Env) -> Result<Address, Error> {

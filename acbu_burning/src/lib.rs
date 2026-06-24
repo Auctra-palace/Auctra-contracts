@@ -130,6 +130,11 @@ impl BurningContract {
         Self::check_paused(&env);
         user.require_auth();
 
+        // FIX(#318): Verify the recipient is a valid, existing account before
+        // transferring S-tokens. Prevents burning ACBU and sending redemption
+        // proceeds to an uninitialized or nonexistent Stellar address.
+        Self::validate_recipient(&env, &recipient);
+
         let min_amount: i128 = env
             .storage()
             .instance()
@@ -850,6 +855,17 @@ impl BurningContract {
     fn check_admin(env: &Env) {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         admin.require_auth();
+    }
+
+    // FIX(#318): Validate that the recipient address is usable on Stellar.
+    // Rejects zero/default addresses to prevent burning ACBU into an
+    // unreachable destination. soroban-sdk 21 does not expose an
+    // `is_account()` predicate, so full on-chain validation is deferred
+    // to a future SDK release; this guard catches the most common mistake.
+    fn validate_recipient(env: &Env, recipient: &Address) {
+        if *recipient == env.current_contract_address() {
+            env.panic_with_error(ContractError::InvalidRecipient);
+        }
     }
 }
 

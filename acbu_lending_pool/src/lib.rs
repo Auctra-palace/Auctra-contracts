@@ -736,6 +736,10 @@ impl LendingPool {
         }
     }
 
+    // FIX(#322): Guard against zero total deposits / zero inputs before
+    // computing interest factors. Returns 0 immediately when any operand
+    // is zero, avoiding unnecessary checked arithmetic and preventing
+    // divide-by-zero if the divisor were ever to evaluate to zero.
     fn calculate_accrued_fee(
         env: &Env,
         principal: i128,
@@ -744,10 +748,21 @@ impl LendingPool {
     ) -> i128 {
         const SECONDS_PER_YEAR: i128 = 31_536_000;
 
+        if principal == 0 || fee_rate_bps == 0 || elapsed_seconds == 0 {
+            return 0;
+        }
+
+        let divisor = BASIS_POINTS.checked_mul(SECONDS_PER_YEAR)
+            .unwrap_or_else(|| env.panic_with_error(Error::InvalidAmount));
+
+        if divisor == 0 {
+            env.panic_with_error(Error::InvalidAmount);
+        }
+
         principal
             .checked_mul(i128::from(fee_rate_bps))
             .and_then(|v| v.checked_mul(i128::from(elapsed_seconds)))
-            .and_then(|v| v.checked_div(BASIS_POINTS * SECONDS_PER_YEAR))
+            .and_then(|v| v.checked_div(divisor))
             .unwrap_or_else(|| env.panic_with_error(Error::InvalidAmount))
     }
 }
