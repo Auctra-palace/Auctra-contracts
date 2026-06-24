@@ -35,7 +35,9 @@ pub enum Error {
     InvalidVersion = 1016,
     TimelockNotElapsed = 1017,
     NoPendingUpgrade = 1018,
-    NoPendingAdminToCancel = 1019,
+    NoPendingAdmin = 1019,
+    AdminTimelockNotElapsed = 1020,
+    NoPendingAdminToCancel = 1021,
     Unknown = 1999,
 }
 
@@ -241,7 +243,7 @@ impl SavingsVault {
             .storage()
             .temporary()
             .get(&key)
-            .unwrap_or(Vec::new(&env));
+            .unwrap_or_else(|| Vec::new(&env));
 
         lots.push_back(DepositLot {
             amount: net_amount,
@@ -392,7 +394,7 @@ impl SavingsVault {
             .storage()
             .temporary()
             .get(&key)
-            .unwrap_or(Vec::new(&env));
+            .unwrap_or_else(|| Vec::new(&env));
         Self::sum_lots(&lots)
     }
 
@@ -504,11 +506,7 @@ impl SavingsVault {
     pub fn propose_upgrade(env: Env, new_wasm_hash: BytesN<32>, new_version: u32) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
-        let current_version: u32 = env
-            .storage()
-            .instance()
-            .get(&SharedDataKey::Version)
-            .unwrap_or(0);
+        let current_version = Self::version(env.clone());
         if new_version <= current_version {
             env.panic_with_error(Error::InvalidVersion);
         }
@@ -550,11 +548,7 @@ impl SavingsVault {
         if env.ledger().timestamp() < eligible_at {
             env.panic_with_error(Error::TimelockNotElapsed);
         }
-        let current_version: u32 = env
-            .storage()
-            .instance()
-            .get(&SharedDataKey::Version)
-            .unwrap_or(0);
+        let current_version = Self::version(env.clone());
         env.storage()
             .instance()
             .remove(&DATA_KEY.pending_upgrade_wasm);
@@ -667,6 +661,13 @@ impl SavingsVault {
         env.storage().instance().get(&DATA_KEY.pending_admin)
     }
 
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&SharedDataKey::Version)
+            .unwrap_or(0)
+    }
+
     pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
         env.storage()
             .instance()
@@ -709,7 +710,6 @@ impl SavingsVault {
             .ok_or(Error::Overflow)?;
         numerator.checked_div(divisor).ok_or(Error::Overflow)
     }
-
     fn migrate_v0_to_v1(_env: Env) {
         // No storage schema changes between v0 and v1.
     }
