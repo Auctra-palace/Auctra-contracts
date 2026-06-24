@@ -27,6 +27,11 @@ pub enum DataKey {
 
 const VERSION: u32 = CONTRACT_VERSION;
 const UPGRADE_TIMELOCK_SECONDS: u64 = 86_400;
+/// Minimum balance a lender may leave in the pool after a partial withdrawal.
+/// A withdrawal must either drain the balance to zero or leave at least this
+/// amount. This prevents dust balances (e.g. 1 stroop) that waste a storage
+/// entry and cause precision errors in later operations.
+const MIN_POOL_BALANCE: i128 = 1_000_000; // 0.1 ACBU (7 decimals)
 /// Admin rotation timelock: the pending admin must wait this long before
 /// claiming ownership, giving the current admin a window to cancel a mistaken
 /// or malicious transfer.
@@ -111,6 +116,7 @@ pub enum Error {
     InsufficientBalance = 6,
     InsufficientCollateral = 7,
     InsufficientLiquidity = 8,
+    DustBalance = 9,
     Paused = 2001,
     InvalidVersion = 2002,
     TimelockNotElapsed = 2003,
@@ -221,6 +227,13 @@ impl LendingPool {
         let new_balance = current_balance
             .checked_sub(amount)
             .unwrap_or_else(|| env.panic_with_error(Error::InsufficientBalance));
+
+        // Reject withdrawals that would leave a dust balance behind. The lender
+        // must either withdraw their full balance or keep at least the minimum.
+        if new_balance != 0 && new_balance < MIN_POOL_BALANCE {
+            env.panic_with_error(Error::DustBalance);
+        }
+
         env.storage()
             .persistent()
             .set(&DataKey::Balance(lender.clone()), &new_balance);

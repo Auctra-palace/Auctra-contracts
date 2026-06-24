@@ -137,6 +137,61 @@ fn test_withdraw_more_than_balance_fails() {
     assert!(result.is_err());
 }
 
+/// A partial withdrawal that would leave a dust balance (below the minimum)
+/// must be rejected, leaving the lender's balance untouched.
+#[test]
+fn test_withdraw_leaving_dust_balance_fails() {
+    let (env, client, _contract_id, _admin, acbu_token) = setup();
+
+    let lender = Address::generate(&env);
+    let amount = 100 * DECIMALS;
+
+    let token_admin = StellarAssetClient::new(&env, &acbu_token);
+    token_admin.mint(&lender, &amount);
+
+    client.deposit(&lender, &amount);
+
+    // Withdrawing all but 1 stroop would leave a dust balance.
+    let result = client.try_withdraw(&lender, &(amount - 1));
+    assert!(result.is_err());
+    assert_eq!(client.get_balance(&lender), amount);
+}
+
+/// Withdrawing the entire balance to exactly zero is always allowed, even
+/// though zero is below the minimum balance threshold.
+#[test]
+fn test_withdraw_full_balance_to_zero_succeeds() {
+    let (env, client, _contract_id, _admin, acbu_token) = setup();
+
+    let lender = Address::generate(&env);
+    let amount = 100 * DECIMALS;
+
+    let token_admin = StellarAssetClient::new(&env, &acbu_token);
+    token_admin.mint(&lender, &amount);
+
+    client.deposit(&lender, &amount);
+    client.withdraw(&lender, &amount);
+
+    assert_eq!(client.get_balance(&lender), 0);
+}
+
+/// A partial withdrawal that leaves at least the minimum balance succeeds.
+#[test]
+fn test_withdraw_leaving_above_minimum_succeeds() {
+    let (env, client, _contract_id, _admin, acbu_token) = setup();
+
+    let lender = Address::generate(&env);
+    let amount = 100 * DECIMALS;
+
+    let token_admin = StellarAssetClient::new(&env, &acbu_token);
+    token_admin.mint(&lender, &amount);
+
+    client.deposit(&lender, &amount);
+    client.withdraw(&lender, &(50 * DECIMALS));
+
+    assert_eq!(client.get_balance(&lender), 50 * DECIMALS);
+}
+
 #[test]
 fn test_withdraw_zero_amount_fails() {
     let (env, client, _contract_id, _admin, _acbu_token) = setup();

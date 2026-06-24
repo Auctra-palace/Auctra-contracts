@@ -19,6 +19,7 @@ pub enum ReserveTrackerError {
     NoPendingAdmin = 8004,
     AdminTimelockNotElapsed = 8005,
     NoPendingAdminToCancel = 8006,
+    Unauthorized = 8007,
     Unknown = 8999,
 }
 
@@ -118,13 +119,17 @@ impl ReserveTrackerContract {
     /// Update reserve amount for a currency (admin or authorized address)
     pub fn update_reserve(
         env: Env,
-        _updater: Address,
+        updater: Address,
         currency: CurrencyCode,
         amount: i128,
         value_usd: i128,
     ) {
-        // Authorize admin
-        Self::check_admin(&env);
+        // Authorize updater
+        updater.require_auth();
+        let admin = Self::get_admin(env.clone());
+        if updater != admin {
+            env.panic_with_error(ReserveTrackerError::Unauthorized);
+        }
 
         let current_time = env.ledger().timestamp();
 
@@ -150,6 +155,7 @@ impl ReserveTrackerContract {
 
     /// Get current reserves for all currencies
     pub fn get_all_reserves(env: Env) -> Map<CurrencyCode, ReserveData> {
+        env.storage().instance().extend_ttl(5184000, 5184000);
         env.storage()
             .instance()
             .get(&DATA_KEY.reserves)
@@ -157,6 +163,15 @@ impl ReserveTrackerContract {
     }
 
     /// Check if the total reserves are sufficient to back the ACBU supply
+    pub fn total_reserves(env: Env) -> i128 {
+        let reserves = Self::get_all_reserves(env.clone());
+        let mut total_usd = 0i128;
+        for (_curr, data) in reserves.iter() {
+            total_usd = total_usd.checked_add(data.value_usd).expect("Overflow");
+        }
+        total_usd
+    }
+
     pub fn is_reserve_sufficient(env: Env, total_acbu_supply: i128) -> bool {
         if total_acbu_supply <= 0 {
             return true;
@@ -300,7 +315,9 @@ impl ReserveTrackerContract {
         }
 
         let old_admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
-        env.storage().instance().set(&DATA_KEY.admin, &pending_admin);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.admin, &pending_admin);
         env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
