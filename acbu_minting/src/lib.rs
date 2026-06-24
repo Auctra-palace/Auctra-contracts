@@ -8,20 +8,16 @@ use soroban_sdk::{
 use shared::{
     calculate_amount_after_fee, calculate_fee, CurrencyCode, DataKey as SharedDataKey, MintEvent,
     reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION, DECIMALS, MAX_MINT_AMOUNT, MIN_MINT_AMOUNT,
-    UPDATE_INTERVAL_SECONDS,
+    UPDATE_INTERVAL_SECONDS, MAX_TOTAL_SUPPLY,
     ORACLE_GET_ACBU_RATE_WITH_TS, ORACLE_GET_RATE_WITH_TS, ORACLE_GET_CURRENCIES,
     ORACLE_GET_BASKET_WEIGHT, ORACLE_GET_RATE, ORACLE_GET_S_TOKEN_ADDR, RESERVE_IS_SUFFICIENT,
-    BASIS_POINTS, CONTRACT_VERSION, DECIMALS, MAX_MINT_AMOUNT, MIN_MINT_AMOUNT,
-    ORACLE_GET_ACBU_RATE_WITH_TS, ORACLE_GET_BASKET_WEIGHT, ORACLE_GET_CURRENCIES, ORACLE_GET_RATE,
-    ORACLE_GET_RATE_WITH_TS, ORACLE_GET_S_TOKEN_ADDR, RESERVE_IS_SUFFICIENT,
-    UPDATE_INTERVAL_SECONDS,
 };
 
 #[allow(dead_code)]
 pub mod token_contract {
     soroban_sdk::contractimport!(
         file = "../soroban_token_contract.wasm",
-        sha256 = "eb1a53948744e12a6b00ec891b301ebc78a06deb984d3726c9cbc315392aedec"
+        sha256 = "fff46d90821401584414ee6afc5ef36d99e95ef7e37d8652ad3e6c4a4e099dc0"
     );
 }
 
@@ -53,6 +49,8 @@ pub struct DataKey {
     pub used_proofs: Symbol,
     pub processed_fintech_tx_ids: Symbol,
     pub max_supply: Symbol,
+    pub pending_admin: Symbol,
+    pub pending_admin_eligible_at: Symbol,
 }
 
 const DATA_KEY: DataKey = DataKey {
@@ -73,6 +71,8 @@ const DATA_KEY: DataKey = DataKey {
     used_proofs: symbol_short!("PROOFS"),
     processed_fintech_tx_ids: symbol_short!("FTX_IDS"),
     max_supply: symbol_short!("MAX_SUP"),
+    pending_admin: symbol_short!("PEND_ADM"),
+    pending_admin_eligible_at: symbol_short!("PEND_ETA"),
 };
 const TX_NONCE_KEY: Symbol = symbol_short!("TX_NONCE");
 
@@ -111,6 +111,7 @@ pub enum MintingError {
     NoPendingAdmin = 5020,
     AdminTimelockNotElapsed = 5021,
     NoPendingAdminToCancel = 5022,
+    InvalidRecipient = 5023,
     Unknown = 5999,
 }
 
@@ -368,6 +369,9 @@ impl MintingContract {
             &Symbol::new(&env, ORACLE_GET_CURRENCIES),
             vec![&env],
         );
+        if currencies.len() > 10 {
+            env.panic_with_error(MintingError::InvalidRecipient);
+        }
 
         let usd_total: i128 = acbu_amount
             .checked_mul(acbu_rate)
@@ -698,8 +702,6 @@ impl MintingContract {
         acbu_sac.mint(&recipient, &acbu_amount);
 
         let fee = calculate_fee(usd_gross, fee_single);
-        let mint_event = MintEvent {
-            transaction_id: SorobanString::from_str(&env, "mint_demo_fiat"),
         let tx_id = generate_unique_tx_id(&env, &recipient, acbu_amount, "mint_demo");
         let mint_event = MintEvent {
             transaction_id: tx_id,
@@ -793,7 +795,6 @@ impl MintingContract {
         // ACBU at an incorrect price.
         let (acbu_rate, acbu_oracle_timestamp): (i128, u64) = env.invoke_contract(
             &oracle_addr,
-            &Symbol::new(&env, "get_acbu_usd_rate_with_timestamp"),
             &Symbol::new(&env, ORACLE_GET_ACBU_RATE_WITH_TS),
             vec![&env],
         );
@@ -801,7 +802,6 @@ impl MintingContract {
 
         let (rate, rate_timestamp): (i128, u64) = env.invoke_contract(
             &oracle_addr,
-            &Symbol::new(&env, "get_rate_with_timestamp"),
             &Symbol::new(&env, ORACLE_GET_RATE_WITH_TS),
             vec![&env, currency.clone().into_val(&env)],
         );
@@ -829,9 +829,6 @@ impl MintingContract {
             .checked_add(acbu_amount)
             .expect("Overflow in projected supply calculation");
         Self::check_supply_cap(&env, projected_supply);
-        let reserve_ok: bool = env.invoke_contract(
-            &reserve_tracker_addr,
-            &Symbol::new(&env, "is_reserve_sufficient"),
         let reserve_ok: bool = env.invoke_contract(
             &reserve_tracker_addr,
             &Symbol::new(&env, RESERVE_IS_SUFFICIENT),
@@ -1324,7 +1321,6 @@ fn mark_proof_used(env: &Env, proof_id: &SorobanString) {
         .persistent()
         .set(&(symbol_short!("PRF_SET"), proof_id.clone()), &true);
 }
-fn migrate_v0_to_v1(_env: Env) {}
 
 // ---------------------------------------------------------------------------
 // C-039: fintech_tx_id validation

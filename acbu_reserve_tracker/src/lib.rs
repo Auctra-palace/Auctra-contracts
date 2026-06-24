@@ -19,6 +19,10 @@ mod shared {
 pub enum ReserveTrackerError {
     AlreadyInitialized = 8001,
     InvalidVersion = 8002,
+    ZeroSupply = 8003,
+    NoPendingAdmin = 8004,
+    AdminTimelockNotElapsed = 8005,
+    NoPendingAdminToCancel = 8006,
     Unknown = 8999,
 }
 
