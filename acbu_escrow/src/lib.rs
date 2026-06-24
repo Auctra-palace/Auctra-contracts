@@ -20,6 +20,10 @@ pub enum EscrowError {
     TimelockNotElapsed = 3009,
     NoPendingUpgrade = 3010,
     Unauthorized = 3011,
+    NoPendingAdmin = 3012,
+    AdminTimelockNotElapsed = 3013,
+    NoPendingAdminToCancel = 3014,
+    InsufficientBalance = 3015,
     Unknown = 3999,
 }
 
@@ -196,7 +200,7 @@ impl Escrow {
         if paused {
             return Err(EscrowError::Paused);
         }
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         if payer == admin {
             admin.require_auth();
         } else {
@@ -236,7 +240,7 @@ impl Escrow {
         // Re-entrancy guard
         reentrancy_guard::acquire_guard(&env);
 
-        let admin = Self::get_admin(&env)?;
+        let admin = Self::load_admin(&env)?;
         admin.require_auth();
 
         let key = EscrowId(payer.clone(), escrow_id);
@@ -252,6 +256,13 @@ impl Escrow {
 
         let acbu = Self::get_acbu_token(&env)?;
         let client = soroban_sdk::token::Client::new(&env, &acbu);
+
+        // Validate contract balance before mutating storage.
+        // Ensures balance state is sound and prevents premature state update if the transfer would fail.
+        let balance = client.balance(&env.current_contract_address());
+        if balance < amount {
+            return Err(EscrowError::InsufficientBalance);
+        }
 
         // CEI: remove the escrow record before the external transfer so the
         // escrow cannot be refunded twice if the token executes a callback.
