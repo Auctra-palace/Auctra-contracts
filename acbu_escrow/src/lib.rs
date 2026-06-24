@@ -22,8 +22,8 @@ pub enum EscrowError {
     NoPendingUpgrade = 3010,
     Unauthorized = 3011,
     NoPendingAdmin = 3012,
-    AdminTimelockNotElapsed = 3013,
-    NoPendingAdminToCancel = 3014,
+    NoPendingAdminToCancel = 3013,
+    AdminTimelockNotElapsed = 3014,
     Expired = 3015,
     Unknown = 3999,
 }
@@ -130,6 +130,25 @@ impl Escrow {
         env.storage()
             .instance()
             .set(&SharedDataKey::Version, &CONTRACT_VERSION);
+    }
+
+    /// Return the stored escrow fields in the same order as `create` parameters:
+    /// `(payer, payee, amount)`.
+    ///
+    /// Keeping the return order consistent with the creation parameters prevents
+    /// off-by-field bugs in client code that destructures the response tuple.
+    pub fn get_escrow(
+        env: Env,
+        payer: Address,
+        escrow_id: u64,
+    ) -> Result<(Address, Address, i128), EscrowError> {
+        let key = EscrowId(payer, escrow_id);
+        let (stored_payer, payee, amount): (Address, Address, i128) = env
+            .storage()
+            .temporary()
+            .get(&key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+        Ok((stored_payer, payee, amount))
     }
 
     /// Create escrow: payer deposits ACBU, payee can claim after release

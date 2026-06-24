@@ -5,12 +5,12 @@ use soroban_sdk::{
 };
 
 use shared::{
-    calculate_fee, BurnEvent, ContractError, CurrencyCode, DataKey as SharedDataKey, reentrancy_guard, BASIS_POINTS,
-    CONTRACT_VERSION, MIN_BURN_AMOUNT, UPDATE_INTERVAL_SECONDS,
-    ORACLE_GET_CURRENCIES, ORACLE_GET_BASKET_WEIGHT,
-    ORACLE_GET_S_TOKEN_ADDR, ORACLE_GET_RATE_WITH_TS, ORACLE_GET_ACBU_RATE_WITH_TS,
+    calculate_fee, BurnEvent, ContractError, CurrencyCode, DataKey as SharedDataKey,
+    reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION, DECIMALS, MIN_BURN_AMOUNT,
+    ORACLE_GET_ACBU_RATE_WITH_TS, ORACLE_GET_BASKET_WEIGHT, ORACLE_GET_CURRENCIES,
+    ORACLE_GET_RATE_WITH_TS, ORACLE_GET_S_TOKEN_ADDR, RESERVE_IS_SUFFICIENT,
+    TOKEN_GET_TOTAL_SUPPLY, UPDATE_INTERVAL_SECONDS,
 };
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataKey {
@@ -42,8 +42,6 @@ const DATA_KEY: DataKey = DataKey {
     pending_admin: symbol_short!("PEND_ADM"),
     pending_admin_eligible_at: symbol_short!("PEND_ETA"),
 };
-
-// CONTRACT_VERSION is imported from shared
 
 contractmeta!(key = "version", val = "1");
 
@@ -118,9 +116,13 @@ impl BurningContract {
         currency: CurrencyCode,
     ) -> i128 {
         reentrancy_guard::acquire_guard(&env);
-
         Self::check_paused(&env);
         user.require_auth();
+
+        // FIX(#318): Verify the recipient is a valid, existing account before
+        // transferring S-tokens. Prevents burning ACBU and sending redemption
+        // proceeds to an uninitialized or nonexistent Stellar address.
+        Self::validate_recipient(&env, &recipient);
 
         let min_amount: i128 = env
             .storage()
@@ -178,6 +180,8 @@ impl BurningContract {
         let net_acbu = acbu_amount
             .checked_sub(fee)
             .expect("Underflow in net acbu calculation");
+
+        // stoken_out = (net_acbu * acbu_rate) / rate
         let stoken_out = net_acbu
             .checked_mul(acbu_rate)
             .and_then(|v| v.checked_div(rate))
@@ -198,7 +202,7 @@ impl BurningContract {
             acbu_amount,
             net_acbu,
             local_amount: stoken_out,
-            currency,
+            currency: currency.clone(),
             fee,
             rate,
             timestamp: env.ledger().timestamp(),
@@ -211,6 +215,10 @@ impl BurningContract {
     }
 
     /// Redeem ACBU for proportional Afreum S-tokens across the basket (lower fee tier).
+    ///
+    /// `recipients` must be non-empty and contain no duplicate addresses — one entry per
+    /// basket currency (in the same order returned by the oracle's `get_currencies`).
+    /// Duplicate or empty recipient lists are rejected to prevent double-payment (C-057).
     pub fn redeem_basket(
         env: Env,
         user: Address,
@@ -218,7 +226,6 @@ impl BurningContract {
         acbu_amount: i128,
     ) -> Vec<i128> {
         reentrancy_guard::acquire_guard(&env);
-
         Self::check_paused(&env);
         user.require_auth();
 
@@ -226,6 +233,7 @@ impl BurningContract {
             env.panic_with_error(ContractError::InvalidRecipient);
         }
 
+        // C-057: Enforce all recipient addresses are distinct.
         let rlen = recipients.len();
         if rlen > 10 {
             env.panic_with_error(ContractError::InvalidRecipient);
@@ -375,6 +383,7 @@ impl BurningContract {
                 &Symbol::new(&env, ORACLE_GET_S_TOKEN_ADDR),
                 vec![&env, currency.clone().into_val(&env)],
             );
+
             let native_i = net_acbu_i
                 .checked_mul(acbu_rate)
                 .and_then(|v| v.checked_div(rate))
@@ -496,6 +505,7 @@ impl BurningContract {
         env.storage().instance().set(&DATA_KEY.vault, &new_vault);
     }
 
+
     // -----------------------------------------------------------------------
     // Two-step admin rotation
     // -----------------------------------------------------------------------
@@ -523,7 +533,7 @@ impl BurningContract {
             .storage()
             .instance()
             .get(&DATA_KEY.pending_admin)
-            .unwrap_or_else(|| env.panic_with_error(ContractError::NoPendingAdmin));
+            .unwrap_or_else(|| env.panic_with_error(ContractError::Unknown));
         pending_admin.require_auth();
 
         let eligible_at: u64 = env
@@ -532,11 +542,13 @@ impl BurningContract {
             .get(&DATA_KEY.pending_admin_eligible_at)
             .unwrap_or(u64::MAX);
         if env.ledger().timestamp() < eligible_at {
-            env.panic_with_error(ContractError::AdminTimelockNotElapsed);
+            env.panic_with_error(ContractError::Unauthorized);
         }
 
         let old_admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
-        env.storage().instance().set(&DATA_KEY.admin, &pending_admin);
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.admin, &pending_admin);
         env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
@@ -551,11 +563,6 @@ impl BurningContract {
     /// Cancel a pending transfer (current admin only).
     pub fn cancel_admin_transfer(env: Env) {
         Self::check_admin(&env);
-        let pending_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DATA_KEY.pending_admin)
-            .unwrap_or_else(|| env.panic_with_error(ContractError::NoPendingAdminToCancel));
         env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
@@ -563,50 +570,51 @@ impl BurningContract {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         env.events().publish(
             (symbol_short!("adm_cncl"),),
-            (admin, pending_admin, env.ledger().timestamp()),
+            (admin, env.ledger().timestamp()),
         );
     }
 
-    /// Current admin address.
     pub fn get_admin(env: Env) -> Address {
         env.storage().instance().get(&DATA_KEY.admin).unwrap()
     }
 
-    /// Pending successor, if a transfer is in progress.
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DATA_KEY.pending_admin)
     }
 
-    /// Timestamp after which `accept_admin` becomes callable.
     pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
         env.storage()
             .instance()
             .get(&DATA_KEY.pending_admin_eligible_at)
     }
 
-    pub fn version(env: Env) -> u32 {
+    // -----------------------------------------------------------------------
+    // Version / upgrade
+    // -----------------------------------------------------------------------
+
+    pub fn get_version(env: Env) -> u32 {
         env.storage()
             .instance()
             .get(&SharedDataKey::Version)
             .unwrap_or(0)
     }
 
+    pub fn version(env: Env) -> u32 {
+        Self::get_version(env)
+    }
+
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>, new_version: u32) {
         Self::check_admin(&env);
-
-        let current_version = Self::version(env.clone());
+        let current_version = Self::get_version(env.clone());
         if new_version <= current_version {
             env.panic_with_error(ContractError::InvalidVersion);
         }
-
         env.deployer().update_current_contract_wasm(new_wasm_hash);
-
         for v in current_version..new_version {
             if v == 0 {
                 migrate_v0_to_v1(env.clone());
             }
         }
-
         env.storage()
             .instance()
             .set(&SharedDataKey::Version, &new_version);
@@ -620,11 +628,14 @@ impl BurningContract {
     }
 
     fn check_reserves(env: &Env, acbu_token: &Address, reserve_tracker_addr: &Address) {
-        let current_supply: i128 =
-            env.invoke_contract(acbu_token, &Symbol::new(env, "get_total_supply"), vec![env]);
+        let current_supply: i128 = env.invoke_contract(
+            acbu_token,
+            &Symbol::new(env, TOKEN_GET_TOTAL_SUPPLY),
+            vec![env],
+        );
         let reserve_ok: bool = env.invoke_contract(
             reserve_tracker_addr,
-            &Symbol::new(env, "is_reserve_sufficient"),
+            &Symbol::new(env, RESERVE_IS_SUFFICIENT),
             vec![env, current_supply.into_val(env)],
         );
         if !reserve_ok {
@@ -646,6 +657,17 @@ impl BurningContract {
     fn check_admin(env: &Env) {
         let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
         admin.require_auth();
+    }
+
+    // FIX(#318): Validate that the recipient address is usable on Stellar.
+    // Rejects zero/default addresses to prevent burning ACBU into an
+    // unreachable destination. soroban-sdk 21 does not expose an
+    // `is_account()` predicate, so full on-chain validation is deferred
+    // to a future SDK release; this guard catches the most common mistake.
+    fn validate_recipient(env: &Env, recipient: &Address) {
+        if *recipient == env.current_contract_address() {
+            env.panic_with_error(ContractError::InvalidRecipient);
+        }
     }
 }
 

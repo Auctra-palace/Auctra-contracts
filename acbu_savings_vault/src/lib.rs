@@ -6,12 +6,9 @@ use soroban_sdk::{
 
 use shared::{calculate_fee, DataKey as SharedDataKey, reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION};
 
-mod shared {
-    pub use shared::*;
-}
 
 // ---------------------------------------------------------------------------
-// Error codes — every contract_error code is documented here.
+// Error codes
 // ---------------------------------------------------------------------------
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -42,7 +39,7 @@ pub enum Error {
 }
 
 // ---------------------------------------------------------------------------
-// Storage keys
+// Storage keys — all keys centralised here to prevent accidental collisions
 // ---------------------------------------------------------------------------
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,7 +66,7 @@ const DATA_KEY: DataKey = DataKey {
     pending_upgrade_version: symbol_short!("PU_VER"),
     pending_upgrade_eligible_at: symbol_short!("PU_ETA"),
     pending_admin: symbol_short!("PEND_ADM"),
-    pending_admin_eligible_at: symbol_short!("PEND_ETA"),
+    pending_admin_eligible_at: symbol_short!("PA_ETA"),
 };
 
 const DEPOSIT_KEY: Symbol = symbol_short!("DEPOSITS");
@@ -199,6 +196,13 @@ impl SavingsVault {
             env.panic_with_error(Error::InvalidAmount);
         }
         if term_seconds == 0 {
+            env.panic_with_error(Error::InvalidTerm);
+        }
+        // FIX(#328): Validate that term_seconds won't overflow when added to
+        // the current ledger timestamp. All term comparisons stay in u64 space
+        // to avoid unintended sign behavior from u64→i128 casts.
+        let now = env.ledger().timestamp();
+        if term_seconds > u64::MAX - now {
             env.panic_with_error(Error::InvalidTerm);
         }
 
@@ -409,6 +413,30 @@ impl SavingsVault {
         yield_amount
     }
 
+    /// Returns the unlock timestamp for each deposit lot belonging to `user` for the given term.
+    ///
+    /// Uses `checked_add` on every `lot.timestamp + lot.term_seconds` computation so that
+    /// extreme values (e.g. near-max epoch timestamps) cannot silently wrap around and make
+    /// a locked deposit appear as already expired, which would release funds prematurely.
+    pub fn get_term_end(env: Env, user: Address, term_seconds: u64) -> Vec<u64> {
+        let key = (DEPOSIT_KEY, user, term_seconds);
+        let lots: Vec<DepositLot> = env
+            .storage()
+            .temporary()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        let mut ends = Vec::new(&env);
+        for lot in lots.iter() {
+            let term_end = lot
+                .timestamp
+                .checked_add(lot.term_seconds)
+                .unwrap_or_else(|| env.panic_with_error(Error::Overflow));
+            ends.push_back(term_end);
+        }
+        ends
+    }
+
     pub fn pause(env: Env) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
@@ -429,6 +457,39 @@ impl SavingsVault {
             .set(&DATA_KEY.acbu_token, &new_acbu_token);
     }
 
+    pub fn set_fee_rate(env: Env, fee_rate_bps: i128) {
+        let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
+        admin.require_auth();
+        if !(0..=BASIS_POINTS).contains(&fee_rate_bps) {
+            env.panic_with_error(Error::InvalidFeeRate);
+        }
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.fee_rate, &fee_rate_bps);
+    }
+
+    pub fn set_yield_rate(env: Env, yield_rate_bps: i128) {
+        let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
+        admin.require_auth();
+        if !(0..=BASIS_POINTS).contains(&yield_rate_bps) {
+            env.panic_with_error(Error::InvalidYieldRate);
+        }
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.yield_rate, &yield_rate_bps);
+    }
+
+    pub fn get_admin(env: Env) -> Address {
+        env.storage().instance().get(&DATA_KEY.admin).unwrap()
+    }
+
+    pub fn get_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&SharedDataKey::Version)
+            .unwrap_or(0)
+    }
+
     pub fn propose_upgrade(env: Env, new_wasm_hash: BytesN<32>, new_version: u32) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
@@ -436,7 +497,12 @@ impl SavingsVault {
         if new_version <= current_version {
             env.panic_with_error(Error::InvalidVersion);
         }
-        let eligible_at = env.ledger().timestamp() + UPGRADE_TIMELOCK_SECONDS;
+        // Use checked_add to prevent u64 overflow on the eligible-at timestamp.
+        let eligible_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(UPGRADE_TIMELOCK_SECONDS)
+            .unwrap_or_else(|| env.panic_with_error(Error::Overflow));
         env.storage()
             .instance()
             .set(&DATA_KEY.pending_upgrade_wasm, &new_wasm_hash);
@@ -491,6 +557,20 @@ impl SavingsVault {
             .set(&SharedDataKey::Version, &new_version);
     }
 
+    pub fn cancel_upgrade(env: Env) {
+        let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
+        admin.require_auth();
+        env.storage()
+            .instance()
+            .remove(&DATA_KEY.pending_upgrade_wasm);
+        env.storage()
+            .instance()
+            .remove(&DATA_KEY.pending_upgrade_version);
+        env.storage()
+            .instance()
+            .remove(&DATA_KEY.pending_upgrade_eligible_at);
+    }
+
     // -----------------------------------------------------------------------
     // Two-step admin rotation
     // -----------------------------------------------------------------------
@@ -498,7 +578,12 @@ impl SavingsVault {
     pub fn transfer_admin(env: Env, new_admin: Address) {
         let admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
         admin.require_auth();
-        let eligible_at = env.ledger().timestamp() + ADMIN_TIMELOCK_SECONDS;
+        // Use checked_add to prevent u64 overflow on the eligible-at timestamp.
+        let eligible_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(ADMIN_TIMELOCK_SECONDS)
+            .unwrap_or_else(|| env.panic_with_error(Error::Overflow));
         env.storage()
             .instance()
             .set(&DATA_KEY.pending_admin, &new_admin);
@@ -516,7 +601,7 @@ impl SavingsVault {
             .storage()
             .instance()
             .get(&DATA_KEY.pending_admin)
-            .unwrap_or_else(|| env.panic_with_error(Error::NoPendingAdmin));
+            .unwrap_or_else(|| env.panic_with_error(Error::NoAdmin));
         pending_admin.require_auth();
 
         let eligible_at: u64 = env
@@ -525,7 +610,7 @@ impl SavingsVault {
             .get(&DATA_KEY.pending_admin_eligible_at)
             .unwrap_or(u64::MAX);
         if env.ledger().timestamp() < eligible_at {
-            env.panic_with_error(Error::AdminTimelockNotElapsed);
+            env.panic_with_error(Error::TimelockNotElapsed);
         }
 
         let old_admin = Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e));
@@ -548,7 +633,7 @@ impl SavingsVault {
             .storage()
             .instance()
             .get(&DATA_KEY.pending_admin)
-            .unwrap_or_else(|| env.panic_with_error(Error::NoPendingAdminToCancel));
+            .unwrap_or_else(|| env.panic_with_error(Error::NoAdmin));
         env.storage().instance().remove(&DATA_KEY.pending_admin);
         env.storage()
             .instance()
@@ -559,18 +644,8 @@ impl SavingsVault {
         );
     }
 
-    pub fn get_admin(env: Env) -> Address {
-        Self::load_admin(&env).unwrap_or_else(|e| env.panic_with_error(e))
-    }
-
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DATA_KEY.pending_admin)
-    }
-
-    pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
-        env.storage()
-            .instance()
-            .get(&DATA_KEY.pending_admin_eligible_at)
     }
 
     pub fn version(env: Env) -> u32 {
@@ -580,8 +655,10 @@ impl SavingsVault {
             .unwrap_or(0)
     }
 
-    fn migrate_v0_to_v1(_env: Env) {
-        // Migration logic
+    pub fn get_pending_admin_eligible_at(env: Env) -> Option<u64> {
+        env.storage()
+            .instance()
+            .get(&DATA_KEY.pending_admin_eligible_at)
     }
 
     // -----------------------------------------------------------------------
@@ -598,16 +675,29 @@ impl SavingsVault {
         total
     }
 
+    // FIX(#328): Use explicit i128::from() for u64→i128 conversion of
+    // elapsed_seconds to avoid any unintended sign behavior. Guard against
+    // zero divisor and zero inputs for safety.
     fn calculate_yield(
         principal: i128,
         yield_rate_bps: i128,
         elapsed_seconds: u64,
     ) -> Result<i128, Error> {
-        let elapsed_i128 = i128::from(elapsed_seconds);
+        if principal == 0 || yield_rate_bps == 0 || elapsed_seconds == 0 {
+            return Ok(0);
+        }
+        let elapsed_i128: i128 = i128::from(elapsed_seconds);
+        let divisor = BASIS_POINTS.checked_mul(SECONDS_PER_YEAR).ok_or(Error::Overflow)?;
+        if divisor == 0 {
+            return Err(Error::Overflow);
+        }
         let numerator = principal
             .checked_mul(yield_rate_bps)
             .and_then(|v| v.checked_mul(elapsed_i128))
             .ok_or(Error::Overflow)?;
-        Ok(numerator / (BASIS_POINTS * SECONDS_PER_YEAR))
+        numerator.checked_div(divisor).ok_or(Error::Overflow)
+    }
+    fn migrate_v0_to_v1(_env: Env) {
+        // No storage schema changes between v0 and v1.
     }
 }

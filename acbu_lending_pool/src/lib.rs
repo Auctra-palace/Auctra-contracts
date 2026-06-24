@@ -27,6 +27,11 @@ pub enum DataKey {
 
 const VERSION: u32 = CONTRACT_VERSION;
 const UPGRADE_TIMELOCK_SECONDS: u64 = 86_400;
+/// Minimum balance a lender may leave in the pool after a partial withdrawal.
+/// A withdrawal must either drain the balance to zero or leave at least this
+/// amount. This prevents dust balances (e.g. 1 stroop) that waste a storage
+/// entry and cause precision errors in later operations.
+const MIN_POOL_BALANCE: i128 = 1_000_000; // 0.1 ACBU (7 decimals)
 /// Admin rotation timelock: the pending admin must wait this long before
 /// claiming ownership, giving the current admin a window to cancel a mistaken
 /// or malicious transfer.
@@ -111,6 +116,7 @@ pub enum Error {
     InsufficientBalance = 6,
     InsufficientCollateral = 7,
     InsufficientLiquidity = 8,
+    DustBalance = 9,
     Paused = 2001,
     InvalidVersion = 2002,
     TimelockNotElapsed = 2003,
@@ -221,6 +227,13 @@ impl LendingPool {
         let new_balance = current_balance
             .checked_sub(amount)
             .unwrap_or_else(|| env.panic_with_error(Error::InsufficientBalance));
+
+        // Reject withdrawals that would leave a dust balance behind. The lender
+        // must either withdraw their full balance or keep at least the minimum.
+        if new_balance != 0 && new_balance < MIN_POOL_BALANCE {
+            env.panic_with_error(Error::DustBalance);
+        }
+
         env.storage()
             .persistent()
             .set(&DataKey::Balance(lender.clone()), &new_balance);
@@ -736,6 +749,10 @@ impl LendingPool {
         }
     }
 
+    // FIX(#322): Guard against zero total deposits / zero inputs before
+    // computing interest factors. Returns 0 immediately when any operand
+    // is zero, avoiding unnecessary checked arithmetic and preventing
+    // divide-by-zero if the divisor were ever to evaluate to zero.
     fn calculate_accrued_fee(
         env: &Env,
         principal: i128,
@@ -744,10 +761,21 @@ impl LendingPool {
     ) -> i128 {
         const SECONDS_PER_YEAR: i128 = 31_536_000;
 
+        if principal == 0 || fee_rate_bps == 0 || elapsed_seconds == 0 {
+            return 0;
+        }
+
+        let divisor = BASIS_POINTS.checked_mul(SECONDS_PER_YEAR)
+            .unwrap_or_else(|| env.panic_with_error(Error::InvalidAmount));
+
+        if divisor == 0 {
+            env.panic_with_error(Error::InvalidAmount);
+        }
+
         principal
             .checked_mul(i128::from(fee_rate_bps))
             .and_then(|v| v.checked_mul(i128::from(elapsed_seconds)))
-            .and_then(|v| v.checked_div(BASIS_POINTS * SECONDS_PER_YEAR))
+            .and_then(|v| v.checked_div(divisor))
             .unwrap_or_else(|| env.panic_with_error(Error::InvalidAmount))
     }
 }

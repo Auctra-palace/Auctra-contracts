@@ -240,6 +240,7 @@ pub const ORACLE_GET_CURRENCIES: &str = "get_currencies";
 pub const ORACLE_GET_BASKET_WEIGHT: &str = "get_basket_weight";
 pub const ORACLE_GET_S_TOKEN_ADDR: &str = "get_s_token_address";
 pub const RESERVE_IS_SUFFICIENT: &str = "is_reserve_sufficient";
+pub const TOKEN_GET_TOTAL_SUPPLY: &str = "get_total_supply";
 
 /// Constants
 pub const BASIS_POINTS: i128 = 10_000;
