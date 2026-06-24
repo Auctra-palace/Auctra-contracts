@@ -4,14 +4,10 @@ use soroban_sdk::{
     BytesN, Env, Map, Symbol, Vec,
 };
 
-use shared::{CurrencyCode, DataKey as SharedDataKey, ReserveData, BASIS_POINTS, CONTRACT_VERSION};
-
-// Single shared-crate re-export. Previously the file contained duplicate
-// `token_contract` module imports and orphaned `initialize` body fragments
-// that were dead code and could shadow real logic on upgrade (issue #197).
-mod shared {
-    pub use shared::*;
-}
+use shared::{
+    CurrencyCode, DataKey as SharedDataKey, ReserveData, BASIS_POINTS, CONTRACT_VERSION,
+    ORACLE_GET_ACBU_RATE, TOKEN_GET_TOTAL_SUPPLY,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -19,6 +15,10 @@ mod shared {
 pub enum ReserveTrackerError {
     AlreadyInitialized = 8001,
     InvalidVersion = 8002,
+    ZeroSupply = 8003,
+    NoPendingAdmin = 8004,
+    AdminTimelockNotElapsed = 8005,
+    NoPendingAdminToCancel = 8006,
     Unknown = 8999,
 }
 
@@ -91,7 +91,7 @@ impl ReserveTrackerContract {
         // Use invoke_contract to avoid dependency on a specific token client implementation
         env.invoke_contract(
             &acbu_token_addr,
-            &Symbol::new(env, "get_total_supply"),
+            &Symbol::new(env, TOKEN_GET_TOTAL_SUPPLY),
             Vec::new(env),
         )
     }
@@ -174,7 +174,7 @@ impl ReserveTrackerContract {
         let oracle_addr: Address = env.storage().instance().get(&DATA_KEY.oracle).unwrap();
         let acbu_usd_rate: i128 = env.invoke_contract(
             &oracle_addr,
-            &Symbol::new(&env, "get_acbu_usd_rate"),
+            &Symbol::new(&env, ORACLE_GET_ACBU_RATE),
             Vec::new(&env),
         );
 
