@@ -6,6 +6,9 @@ use soroban_sdk::{
 
 use shared::{calculate_fee, DataKey as SharedDataKey, reentrancy_guard, BASIS_POINTS, CONTRACT_VERSION};
 
+mod shared {
+    pub use shared::*;
+}
 
 // ---------------------------------------------------------------------------
 // Error codes
@@ -221,6 +224,20 @@ impl SavingsVault {
         let token = soroban_sdk::token::Client::new(&env, &acbu);
         let vault_addr = env.current_contract_address();
 
+        // Transfer the net amount to the vault first, verifying success.
+        match token.try_transfer(&user, &vault_addr, &net_amount) {
+            Ok(Ok(())) => {}
+            _ => env.panic_with_error(Error::AccountingError),
+        }
+        // Transfer the fee to the admin if applicable, verifying success.
+        if fee_amount > 0 {
+            match token.try_transfer(&user, &admin, &fee_amount) {
+                Ok(Ok(())) => {}
+                _ => env.panic_with_error(Error::AccountingError),
+            }
+        }
+
+        // Record the deposit lot in storage after the transfers succeed
         let key = (DEPOSIT_KEY, user.clone(), term_seconds);
         let mut lots: Vec<DepositLot> = env
             .storage()
@@ -236,10 +253,6 @@ impl SavingsVault {
 
         env.storage().temporary().set(&key, &lots);
 
-        token.transfer(&user, &vault_addr, &net_amount);
-        if fee_amount > 0 {
-            token.transfer(&user, &admin, &fee_amount);
-        }
 
         env.events().publish(
             (symbol_short!("Deposit"), user.clone()),
