@@ -28,7 +28,7 @@ fn create_locks_payer_funds() {
     let (client, admin, token) = setup(&env);
     let payer = Address::generate(&env);
     let payee = Address::generate(&env);
-    let amount = 1_000i128;
+    let amount = 10_000_000i128;
 
     mint(&env, &admin, &token, &payer, amount);
     client.create(&payer, &payee, &amount, &1);
@@ -44,7 +44,7 @@ fn release_pays_payee_and_removes_escrow() {
     let (client, admin, token) = setup(&env);
     let payer = Address::generate(&env);
     let payee = Address::generate(&env);
-    let amount = 1_500i128;
+    let amount = 15_000_000i128;
     let escrow_id = 7u64;
 
     mint(&env, &admin, &token, &payer, amount);
@@ -62,7 +62,7 @@ fn refund_returns_funds_to_payer_and_removes_escrow() {
     let (client, admin, token) = setup(&env);
     let payer = Address::generate(&env);
     let payee = Address::generate(&env);
-    let amount = 2_000i128;
+    let amount = 20_000_000i128;
     let escrow_id = 9u64;
 
     mint(&env, &admin, &token, &payer, amount);
@@ -86,8 +86,8 @@ fn different_payers_can_reuse_same_escrow_id_without_collision() {
     mint(&env, &admin, &token, &payer_a, 700);
     mint(&env, &admin, &token, &payer_b, 300);
 
-    client.create(&payer_a, &payee, &700, &escrow_id);
-    client.create(&payer_b, &payee, &300, &escrow_id);
+    client.create(&payer_a, &payee, &70_000_000, &escrow_id);
+    client.create(&payer_b, &payee, &30_000_000, &escrow_id);
 
     client.release(&escrow_id, &payer_a);
     client.release(&escrow_id, &payer_b);
@@ -104,9 +104,9 @@ fn same_payer_same_escrow_id_is_rejected_until_released() {
     let payee = Address::generate(&env);
     let escrow_id = 11u64;
 
-    mint(&env, &admin, &token, &payer, 1_000);
-    client.create(&payer, &payee, &400, &escrow_id);
-    assert!(client.try_create(&payer, &payee, &100, &escrow_id).is_err());
+    mint(&env, &admin, &token, &payer, 100_000_000);
+    client.create(&payer, &payee, &40_000_000, &escrow_id);
+    assert!(client.try_create(&payer, &payee, &10_000_000, &escrow_id).is_err());
 
     client.release(&escrow_id, &payer);
     client.create(&payer, &payee, &100, &escrow_id);

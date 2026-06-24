@@ -17,7 +17,7 @@ use shared::{
 pub mod token_contract {
     soroban_sdk::contractimport!(
         file = "../soroban_token_contract.wasm",
-        sha256 = "8759e8ea16c858a6d3b743dd0be8b580e363d0097538fb77b375965619288d95"
+        sha256 = "fff46d90821401584414ee6afc5ef36d99e95ef7e37d8652ad3e6c4a4e099dc0"
     );
 }
 
@@ -119,6 +119,7 @@ pub enum MintingError {
     NoPendingAdmin = 5020,
     AdminTimelockNotElapsed = 5021,
     NoPendingAdminToCancel = 5022,
+    InvalidRecipient = 5023,
     Unknown = 5999,
 }
 
@@ -376,6 +377,9 @@ impl MintingContract {
             &Symbol::new(&env, ORACLE_GET_CURRENCIES),
             vec![&env],
         );
+        if currencies.len() > 10 {
+            env.panic_with_error(MintingError::InvalidRecipient);
+        }
 
         let usd_total: i128 = acbu_amount
             .checked_mul(acbu_rate)
