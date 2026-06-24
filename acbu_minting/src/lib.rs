@@ -17,7 +17,7 @@ use shared::{
 pub mod token_contract {
     soroban_sdk::contractimport!(
         file = "../soroban_token_contract.wasm",
-        sha256 = "eb1a53948744e12a6b00ec891b301ebc78a06deb984d3726c9cbc315392aedec"
+        sha256 = "8759e8ea16c858a6d3b743dd0be8b580e363d0097538fb77b375965619288d95"
     );
 }
 
@@ -897,6 +897,10 @@ impl MintingContract {
 
     /// Testnet / ops: transfer demo basket S-token from custodial balance on this contract to
     /// `recipient` (e.g. user faucet). Admin only; caps per call to limit abuse.
+    ///
+    /// FIX(#330): Accepts an explicit `recipient` address so the admin can seed
+    /// test user accounts in one transaction, instead of dripping to themselves
+    /// and relaying in a second call.
     ///
     /// FIX(#327): This is an admin-only entry point, fully isolated from
     /// `mint_from_fiat`. It requires admin auth (not operator auth), enforces
