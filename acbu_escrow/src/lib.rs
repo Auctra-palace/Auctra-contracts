@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Symbol,
 };
 
 use shared::{DataKey as SharedDataKey, CONTRACT_VERSION, reentrancy_guard};
@@ -82,6 +83,8 @@ pub struct EscrowRefundedEvent {
     pub amount: i128,
     pub timestamp: u64,
 }
+
+contractmeta!(key = "version", val = "1");
 
 #[contract]
 pub struct Escrow;

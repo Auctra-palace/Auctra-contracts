@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Map, Symbol, Vec,
 };
 
 use shared::{
@@ -51,6 +51,8 @@ const MIN_ORACLE_SOURCE_FEEDS: u32 = 3;
 pub struct DataKey {
     pub admin: Symbol,
     pub validators: Symbol,
+    /// O(log n) membership index mirroring `validators` for fast lookups.
+    pub validator_set: Symbol,
     pub min_signatures: Symbol,
     pub currencies: Symbol,
     pub rates: Symbol,
@@ -75,6 +77,7 @@ pub struct DataKey {
 const DATA_KEY: DataKey = DataKey {
     admin: symbol_short!("ADMIN"),
     validators: symbol_short!("VALIDTRS"),
+    validator_set: symbol_short!("VAL_SET"),
     min_signatures: symbol_short!("MIN_SIG"),
     currencies: symbol_short!("CURRNCYS"),
     rates: symbol_short!("RATES"),
@@ -143,6 +146,8 @@ pub struct ValidatorSignature {
     pub timestamp: u64,
 }
 
+contractmeta!(key = "version", val = "9");
+
 #[contract]
 pub struct OracleContract;
 
@@ -178,6 +183,15 @@ impl OracleContract {
         env.storage()
             .instance()
             .set(&DATA_KEY.validators, &validators);
+        // Build the membership index mirroring the validator list so that
+        // per-submission authorization checks are O(log n) instead of O(n).
+        let mut validator_set: Map<Address, bool> = Map::new(&env);
+        for v in validators.iter() {
+            validator_set.set(v, true);
+        }
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.validator_set, &validator_set);
         env.storage()
             .instance()
             .set(&DATA_KEY.min_signatures, &min_signatures);
@@ -343,15 +357,31 @@ impl OracleContract {
     ) {
         validator.require_auth();
 
-        let validators: Vec<Address> = env.storage().instance().get(&DATA_KEY.validators).unwrap();
-        let mut is_validator = false;
-        for v in validators.iter() {
-            if v == validator {
-                is_validator = true;
-                break;
+        // Authorization check via an O(log n) membership index instead of an
+        // O(n) linear scan over the validator Vec. With up to MAX_VALIDATORS
+        // submitting each epoch this avoids quadratic per-epoch CPU cost.
+        // Contracts upgraded from a version without the index are lazily
+        // backfilled here on first use.
+        let validator_set: Map<Address, bool> = match env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.validator_set)
+        {
+            Some(set) => set,
+            None => {
+                let validators: Vec<Address> =
+                    env.storage().instance().get(&DATA_KEY.validators).unwrap();
+                let mut set: Map<Address, bool> = Map::new(&env);
+                for v in validators.iter() {
+                    set.set(v, true);
+                }
+                env.storage()
+                    .instance()
+                    .set(&DATA_KEY.validator_set, &set);
+                set
             }
-        }
-        if !is_validator {
+        };
+        if !validator_set.contains_key(validator.clone()) {
             env.panic_with_error(OracleError::UnauthorizedValidator);
         }
 
@@ -696,10 +726,11 @@ impl OracleContract {
                 env.panic_with_error(OracleError::MaxValidatorsReached);
             }
             let mut new_validators = validators.clone();
-            new_validators.push_back(validator);
+            new_validators.push_back(validator.clone());
             env.storage()
                 .instance()
                 .set(&DATA_KEY.validators, &new_validators);
+            Self::index_validator(&env, &validator, true);
         } else {
             let min_sigs: u32 = env
                 .storage()
@@ -718,7 +749,26 @@ impl OracleContract {
             env.storage()
                 .instance()
                 .set(&DATA_KEY.validators, &new_validators);
+            Self::index_validator(&env, &validator, false);
         }
+    }
+
+    /// Keep the `validator_set` membership index in sync with the validator
+    /// list: `add` inserts the entry, otherwise it is removed.
+    fn index_validator(env: &Env, validator: &Address, add: bool) {
+        let mut validator_set: Map<Address, bool> = env
+            .storage()
+            .instance()
+            .get(&DATA_KEY.validator_set)
+            .unwrap_or_else(|| Map::new(env));
+        if add {
+            validator_set.set(validator.clone(), true);
+        } else {
+            validator_set.remove(validator.clone());
+        }
+        env.storage()
+            .instance()
+            .set(&DATA_KEY.validator_set, &validator_set);
     }
 
     pub fn cancel_validator_change(env: Env) {
