@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol,
+    contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
+    BytesN, Env, Symbol,
 };
 
 use shared::{DataKey as SharedDataKey, CONTRACT_VERSION, reentrancy_guard};
@@ -87,6 +88,8 @@ pub struct EscrowRefundedEvent {
     pub timestamp: u64,
 }
 
+contractmeta!(key = "version", val = "1");
+
 #[contract]
 pub struct Escrow;
 
@@ -124,6 +127,25 @@ impl Escrow {
         env.storage()
             .instance()
             .set(&SharedDataKey::Version, &CONTRACT_VERSION);
+    }
+
+    /// Return the stored escrow fields in the same order as `create` parameters:
+    /// `(payer, payee, amount)`.
+    ///
+    /// Keeping the return order consistent with the creation parameters prevents
+    /// off-by-field bugs in client code that destructures the response tuple.
+    pub fn get_escrow(
+        env: Env,
+        payer: Address,
+        escrow_id: u64,
+    ) -> Result<(Address, Address, i128), EscrowError> {
+        let key = EscrowId(payer, escrow_id);
+        let (stored_payer, payee, amount): (Address, Address, i128) = env
+            .storage()
+            .temporary()
+            .get(&key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+        Ok((stored_payer, payee, amount))
     }
 
     /// Create escrow: payer deposits ACBU, payee can claim after release
