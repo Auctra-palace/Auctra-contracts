@@ -497,11 +497,20 @@ impl OracleContract {
             .instance()
             .get(&DATA_KEY.rates)
             .unwrap_or(Map::new(&env));
-        rates.set(currency, rate_data);
+        rates.set(currency.clone(), rate_data);
         env.storage().instance().set(&DATA_KEY.rates, &rates);
         env.storage()
             .instance()
             .set(&DATA_KEY.last_update, &current_time);
+
+        let admin: Address = env.storage().instance().get(&DATA_KEY.admin).unwrap();
+        let event = RateUpdateEvent {
+            currency,
+            rate,
+            timestamp: current_time,
+            validator: admin,
+        };
+        env.events().publish((symbol_short!("rate_upd"),), event);
     }
 
     pub fn get_rate(env: Env, currency: CurrencyCode) -> i128 {
