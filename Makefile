@@ -12,8 +12,8 @@ help:
 	@printf "  make deploy-testnet     Deploy to Stellar testnet\n"
 	@printf "  make deploy-mainnet     Deploy to Stellar mainnet\n"
 	@printf "  make setup-hooks        Install git hooks for the repository\n"
-	@printf "  make build-minting      Build the acbu_minting contract\n"
-	@printf "  make test-minting       Run tests for the acbu_minting contract\n"
+	@printf "  make build-minting      Build the auctra_minting contract\n"
+	@printf "  make test-minting       Run tests for the auctra_minting contract\n"
 	@printf "  make validate-snapshots Validate test snapshots for staleness\n"
 	@printf "  make clean-snapshots    Delete all test snapshots (use before regeneration)\n"
 	@printf "  make docs-error-codes   Regenerate docs/ERROR_CODES.md from source\n"
@@ -24,16 +24,16 @@ build:
 	cargo build --target wasm32-unknown-unknown --release
 
 build-minting:
-	@printf "Building acbu_minting contract...\n"
-	cd acbu_minting && cargo build --target wasm32-unknown-unknown --release
+	@printf "Building auctra_minting contract...\n"
+	cd auctra_minting && cargo build --target wasm32-unknown-unknown --release
 
 test:
 	@printf "Running workspace tests...\n"
 	cargo test
 
 test-minting:
-	@printf "Running acbu_minting tests...\n"
-	cd acbu_minting && cargo test
+	@printf "Running auctra_minting tests...\n"
+	cd auctra_minting && cargo test
 
 deploy-testnet:
 	@if [ -z "$$STELLAR_SECRET_KEY" ]; then \
@@ -57,11 +57,11 @@ setup-hooks:
 
 validate-snapshots:
 	@printf "Validating test snapshots...\n"
-	cargo test test_snapshot_validation --package acbu_minting -- --nocapture
+	cargo test test_snapshot_validation --package auctra_minting -- --nocapture
 
 clean-snapshots:
 	@printf "Cleaning test snapshots...\n"
-	rm -rf acbu_minting/test_snapshots/*.json
+	rm -rf auctra_minting/test_snapshots/*.json
 	@printf "Snapshots cleaned. Regenerate by running: make test-minting\n"
 
 docs-error-codes:

@@ -3,18 +3,18 @@ name: Validate Test Snapshots
 on:
   pull_request:
     paths:
-      - 'acbu_minting/src/**'
-      - 'acbu_minting/tests/**'
-      - 'acbu_minting/test_snapshots/**'
+      - 'auctra_minting/src/**'
+      - 'auctra_minting/tests/**'
+      - 'auctra_minting/test_snapshots/**'
       - 'shared/src/**'
   push:
     branches:
       - main
       - develop
     paths:
-      - 'acbu_minting/src/**'
-      - 'acbu_minting/tests/**'
-      - 'acbu_minting/test_snapshots/**'
+      - 'auctra_minting/src/**'
+      - 'auctra_minting/tests/**'
+      - 'auctra_minting/test_snapshots/**'
       - 'shared/src/**'
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
 
       - name: Validate snapshots
         run: |
-          cargo test test_snapshot_validation --package acbu_minting -- --nocapture
+          cargo test test_snapshot_validation --package auctra_minting -- --nocapture
         continue-on-error: false
 
       - name: Check for snapshot staleness
@@ -61,7 +61,7 @@ jobs:
           echo "::error::❌ Test snapshot validation failed!"
           echo "::error::Snapshots may be stale after code refactoring."
           echo "::error::Please follow the Snapshot Management Guide:"
-          echo "::error::  1. Review acbu_minting/SNAPSHOT_MANAGEMENT.md"
+          echo "::error::  1. Review auctra_minting/SNAPSHOT_MANAGEMENT.md"
           echo "::error::  2. Update EXPECTED_STORAGE_KEYS and EXPECTED_EVENT_TYPES if needed"
           echo "::error::  3. Regenerate snapshots: make clean-snapshots && make test-minting"
           echo "::error::  4. Commit updated snapshots"

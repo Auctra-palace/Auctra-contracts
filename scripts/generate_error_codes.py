@@ -73,13 +73,13 @@ def collect_enums() -> list[ErrorEnum]:
     source_files = [
         WORKSPACE_ROOT / "shared" / "src" / "lib.rs",
         WORKSPACE_ROOT / "shared" / "src" / "reentrancy_guard.rs",
-        WORKSPACE_ROOT / "acbu_multisig" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_savings_vault" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_lending_pool" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_escrow" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_minting" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_oracle" / "src" / "lib.rs",
-        WORKSPACE_ROOT / "acbu_reserve_tracker" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_multisig" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_savings_vault" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_lending_pool" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_escrow" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_minting" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_oracle" / "src" / "lib.rs",
+        WORKSPACE_ROOT / "auctra_reserve_tracker" / "src" / "lib.rs",
     ]
 
     enums: list[ErrorEnum] = []

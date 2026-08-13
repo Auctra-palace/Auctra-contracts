@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ACBU Soroban Contracts Deployment Script
+# Auctra Soroban Contracts Deployment Script
 # Usage: ./deploy.sh [testnet|mainnet]
 
 set -e
@@ -15,7 +15,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Deploying ACBU contracts to ${NETWORK}${NC}"
+echo -e "${GREEN}Deploying Auctra contracts to ${NETWORK}${NC}"
 
 # Check if soroban CLI is installed
 if ! command -v soroban &> /dev/null; then
@@ -64,7 +64,7 @@ echo -e "${GREEN}Deploying contracts...${NC}"
 
 # Deploy Oracle
 echo -e "${YELLOW}Deploying Oracle contract...${NC}"
-ORACLE_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_oracle.wasm"
+ORACLE_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_oracle.wasm"
 ORACLE_ID=$(soroban contract deploy \
     --wasm "$ORACLE_WASM" \
     --network "$NETWORK" \
@@ -75,7 +75,7 @@ echo -e "${GREEN}Oracle deployed: $ORACLE_ID${NC}"
 
 # Deploy Reserve Tracker
 echo -e "${YELLOW}Deploying Reserve Tracker contract...${NC}"
-RESERVE_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_reserve_tracker.wasm"
+RESERVE_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_reserve_tracker.wasm"
 RESERVE_ID=$(soroban contract deploy \
     --wasm "$RESERVE_WASM" \
     --network "$NETWORK" \
@@ -86,7 +86,7 @@ echo -e "${GREEN}Reserve Tracker deployed: $RESERVE_ID${NC}"
 
 # Deploy Minting
 echo -e "${YELLOW}Deploying Minting contract...${NC}"
-MINTING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_minting.wasm"
+MINTING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_minting.wasm"
 MINTING_ID=$(soroban contract deploy \
     --wasm "$MINTING_WASM" \
     --network "$NETWORK" \
@@ -97,7 +97,7 @@ echo -e "${GREEN}Minting deployed: $MINTING_ID${NC}"
 
 # Deploy Burning
 echo -e "${YELLOW}Deploying Burning contract...${NC}"
-BURNING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_burning.wasm"
+BURNING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_burning.wasm"
 BURNING_ID=$(soroban contract deploy \
     --wasm "$BURNING_WASM" \
     --network "$NETWORK" \
@@ -108,7 +108,7 @@ echo -e "${GREEN}Burning deployed: $BURNING_ID${NC}"
 
 # Deploy Lending Pool
 echo -e "${YELLOW}Deploying Lending Pool contract...${NC}"
-LENDING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_lending_pool.wasm"
+LENDING_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_lending_pool.wasm"
 LENDING_ID=$(soroban contract deploy \
     --wasm "$LENDING_WASM" \
     --network "$NETWORK" \
@@ -119,7 +119,7 @@ echo -e "${GREEN}Lending Pool deployed: $LENDING_ID${NC}"
 
 # Deploy Escrow
 echo -e "${YELLOW}Deploying Escrow contract...${NC}"
-ESCROW_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/acbu_escrow.wasm"
+ESCROW_WASM="$CONTRACTS_DIR/target/wasm32-unknown-unknown/release/auctra_escrow.wasm"
 ESCROW_ID=$(soroban contract deploy \
     --wasm "$ESCROW_WASM" \
     --network "$NETWORK" \
@@ -148,7 +148,7 @@ EOF
 
 # Initialize contracts (Note: Placeholder addresses for tokens and admin)
 ADMIN_ADDRESS=$(soroban keys address "$STELLAR_SECRET_KEY")
-ACBU_TOKEN_ID="TODO_ACBU_TOKEN_ID"
+AUCTRA_TOKEN_ID="TODO_AUCTRA_TOKEN_ID"
 USDC_TOKEN_ID="TODO_USDC_TOKEN_ID"
 VAULT_ADDRESS="TODO_VAULT_ADDRESS"
 TREASURY_ADDRESS="TODO_TREASURY_ADDRESS"
@@ -174,7 +174,7 @@ soroban contract invoke \
     initialize \
     --admin "$ADMIN_ADDRESS" \
     --oracle "$ORACLE_ID" \
-    --acbu_token "$ACBU_TOKEN_ID" \
+    --auctra_token "$AUCTRA_TOKEN_ID" \
     --min_ratio 10200
 
 # Initialize Minting
@@ -187,7 +187,7 @@ soroban contract invoke \
     --admin "$ADMIN_ADDRESS" \
     --oracle "$ORACLE_ID" \
     --reserve_tracker "$RESERVE_ID" \
-    --acbu_token "$ACBU_TOKEN_ID" \
+    --auctra_token "$AUCTRA_TOKEN_ID" \
     --usdc_token "$USDC_TOKEN_ID" \
     --vault "$VAULT_ADDRESS" \
     --treasury "$TREASURY_ADDRESS" \
@@ -204,7 +204,7 @@ soroban contract invoke \
     --admin "$ADMIN_ADDRESS" \
     --oracle "$ORACLE_ID" \
     --reserve_tracker "$RESERVE_ID" \
-    --acbu_token "$ACBU_TOKEN_ID" \
+    --auctra_token "$AUCTRA_TOKEN_ID" \
     --withdrawal_processor "$WD_PROC_ADDRESS" \
     --vault "$VAULT_ADDRESS" \
     --fee_rate_bps 30 \
@@ -218,7 +218,7 @@ soroban contract invoke \
     -- \
     initialize \
     --admin "$ADMIN_ADDRESS" \
-    --acbu_token "$ACBU_TOKEN_ID"
+    --auctra_token "$AUCTRA_TOKEN_ID"
 
 # Initialize Escrow
 soroban contract invoke \
@@ -228,7 +228,7 @@ soroban contract invoke \
     -- \
     initialize \
     --admin "$ADMIN_ADDRESS" \
-    --acbu_token "$ACBU_TOKEN_ID"
+    --auctra_token "$AUCTRA_TOKEN_ID"
 
 echo -e "${GREEN}Deployment and initialization complete!${NC}"
 echo -e "${GREEN}Contract addresses saved to: $DEPLOYMENT_FILE${NC}"

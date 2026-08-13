@@ -27,17 +27,17 @@ if git diff --cached --name-only | grep -q "soroban_token_contract.wasm"; then
     echo "New WASM hash: $NEW_HASH"
     echo ""
     echo "You must update the hash in:"
-    echo "  - acbu_minting/src/lib.rs"
-    echo "  - acbu_burning/src/lib.rs"
-    echo "  - acbu_reserve_tracker/src/lib.rs"
+    echo "  - auctra_minting/src/lib.rs"
+    echo "  - auctra_burning/src/lib.rs"
+    echo "  - auctra_reserve_tracker/src/lib.rs"
     echo "  - scripts/verify_wasm_hash.sh"
     echo "  - .github/workflows/verify-wasm-integrity.yml"
     echo ""
     
     # Check if hashes are updated
-    MINTING_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/acbu_minting/src/lib.rs" || echo "")
-    BURNING_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/acbu_burning/src/lib.rs" || echo "")
-    RESERVE_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/acbu_reserve_tracker/src/lib.rs" || echo "")
+    MINTING_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/auctra_minting/src/lib.rs" || echo "")
+    BURNING_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/auctra_burning/src/lib.rs" || echo "")
+    RESERVE_HASH=$(grep -oP 'sha256 = "\K[^"]+' "$PROJECT_ROOT/auctra_reserve_tracker/src/lib.rs" || echo "")
     
     if [ "$MINTING_HASH" != "$NEW_HASH" ] || [ "$BURNING_HASH" != "$NEW_HASH" ] || [ "$RESERVE_HASH" != "$NEW_HASH" ]; then
         echo -e "${RED}[FAIL]${NC} Contract hashes not updated to match new WASM"
@@ -52,7 +52,7 @@ fi
 # Verify hash consistency in staged changes
 EXPECTED_HASH="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
 
-for contract in acbu_minting acbu_burning acbu_reserve_tracker; do
+for contract in auctra_minting auctra_burning auctra_reserve_tracker; do
     FILE="$PROJECT_ROOT/$contract/src/lib.rs"
     if git diff --cached "$FILE" | grep -q "sha256"; then
         echo -e "${YELLOW}⚠️  Hash modified in $contract${NC}"
@@ -69,26 +69,26 @@ echo -e "${GREEN}[PASS]${NC} WASM integrity checks passed"
 # Check snapshot validity if snapshot-related files are being modified
 echo -e "${YELLOW}[Pre-commit Hook]${NC} Checking test snapshots..."
 
-SNAPSHOT_RELATED_FILES=$(git diff --cached --name-only | grep -E "(acbu_minting/src/|acbu_minting/tests/|acbu_minting/test_snapshots/|shared/src/)" || true)
+SNAPSHOT_RELATED_FILES=$(git diff --cached --name-only | grep -E "(auctra_minting/src/|auctra_minting/tests/|auctra_minting/test_snapshots/|shared/src/)" || true)
 
 if [ -n "$SNAPSHOT_RELATED_FILES" ]; then
     echo -e "${YELLOW}⚠️  Snapshot-related files modified, validating snapshots...${NC}"
     
     # Run snapshot validation
-    if ! cargo test test_snapshot_validation --package acbu_minting --quiet 2>&1 | grep -q "test result: ok"; then
+    if ! cargo test test_snapshot_validation --package auctra_minting --quiet 2>&1 | grep -q "test result: ok"; then
         echo -e "${RED}[FAIL]${NC} Snapshot validation failed!"
         echo ""
         echo "Modified files:"
         echo "$SNAPSHOT_RELATED_FILES"
         echo ""
         echo "Run the following to see details:"
-        echo "  cargo test test_snapshot_validation --package acbu_minting -- --nocapture"
+        echo "  cargo test test_snapshot_validation --package auctra_minting -- --nocapture"
         echo ""
         echo "To fix:"
-        echo "  1. Review: acbu_minting/SNAPSHOT_MANAGEMENT.md"
+        echo "  1. Review: auctra_minting/SNAPSHOT_MANAGEMENT.md"
         echo "  2. Update EXPECTED_STORAGE_KEYS and EXPECTED_EVENT_TYPES if needed"
         echo "  3. Regenerate: make clean-snapshots && make test-minting"
-        echo "  4. Stage updated snapshots: git add acbu_minting/test_snapshots/"
+        echo "  4. Stage updated snapshots: git add auctra_minting/test_snapshots/"
         exit 1
     fi
     

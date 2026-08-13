@@ -1,12 +1,12 @@
-# ACBU Soroban Contracts - Quick Start
+# Auctra Soroban Contracts - Quick Start
 
-This is a quick start guide to get you up and running with ACBU Soroban contracts.
+This is a quick start guide to get you up and running with Auctra Soroban contracts.
 
 ## What's Included
 
 - **4 Core Contracts:**
-  - Minting Contract - USDC/Fiat → ACBU
-  - Burning Contract - ACBU → Fiat
+  - Minting Contract - USDC/Fiat → Auctra
+  - Burning Contract - Auctra → Fiat
   - Oracle Contract - Exchange rate aggregation
   - Reserve Tracker Contract - Reserve verification
 
@@ -59,7 +59,7 @@ export CONTRACT_BURNING="<burning-contract-id>"
 ```typescript
 import { mintingService } from './services/contracts';
 
-// Mint ACBU from USDC
+// Mint Auctra from USDC
 const result = await mintingService.mintFromUsdc({
   usdcAmount: '10000000', // 10 USDC
   recipient: 'G...',
@@ -76,14 +76,14 @@ const result = await mintingService.mintFromUsdc({
 
 ```
 .
-├── acbu_minting/
-├── acbu_burning/
-├── acbu_oracle/
-├── acbu_reserve_tracker/
-├── acbu_savings_vault/
-├── acbu_lending_pool/
-├── acbu_escrow/
-├── acbu_multisig/
+├── auctra_minting/
+├── auctra_burning/
+├── auctra_oracle/
+├── auctra_reserve_tracker/
+├── auctra_savings_vault/
+├── auctra_lending_pool/
+├── auctra_escrow/
+├── auctra_multisig/
 ├── shared/
 ├── scripts/
 ├── docs/

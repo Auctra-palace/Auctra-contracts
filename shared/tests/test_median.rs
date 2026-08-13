@@ -92,10 +92,7 @@ fn test_median_all_equal() {
 fn test_median_large_7decimal_rates() {
     let env = Env::default();
     // Simulate oracle source rates at 7 decimals
-    let v = make_vec(
-        &env,
-        &[1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000],
-    );
+    let v = make_vec(&env, &[1_000_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000]);
     assert_eq!(median(v), Some(3_000_000), "median(v) should equal Some(3_000_000)");
 }
 
@@ -141,12 +138,6 @@ fn test_median_max_source_budget_regression() {
     // Native Rust tests underestimate WASM metering, so this is a regression ceiling rather
     // than an exact mainnet fee quote. It still fails if the median path becomes materially
     // more expensive for the largest quorum-sized source set we submit in oracle tests.
-    assert!(
-        cpu <= 50_000,
-        "median CPU budget regression: consumed {cpu}, limit 50_000"
-    );
-    assert!(
-        mem <= 10_000,
-        "median memory budget regression: consumed {mem}, limit 10_000"
-    );
+    assert!(cpu <= 50_000, "median CPU budget regression: consumed {cpu}, limit 50_000");
+    assert!(mem <= 10_000, "median memory budget regression: consumed {mem}, limit 10_000");
 }

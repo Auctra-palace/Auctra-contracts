@@ -2,13 +2,13 @@
 
 ## Overview
 
-This document describes the WASM artifact integrity verification process for ACBU smart contracts. This is a critical security control to prevent supply chain attacks through WASM substitution.
+This document describes the WASM artifact integrity verification process for Auctra smart contracts. This is a critical security control to prevent supply chain attacks through WASM substitution.
 
 ## Problem Statement
 
 **Severity**: Medium  
 **Area**: contracts/build  
-**Affected Contracts**: acbu_minting, acbu_burning, acbu_reserve_tracker  
+**Affected Contracts**: auctra_minting, auctra_burning, auctra_reserve_tracker  
 **Risk**: Integrity not verified; supply chain risk
 
 The token WASM contract (`soroban_token_contract.wasm`) is imported by three critical contracts using the Soroban SDK's `contractimport!` macro. Without proper hash verification, an attacker could:
@@ -16,7 +16,7 @@ The token WASM contract (`soroban_token_contract.wasm`) is imported by three cri
 1. Replace the WASM artifact with a malicious version
 2. Modify the artifact during build or deployment
 3. Inject unauthorized token operations (mint, burn, transfer)
-4. Compromise the entire ACBU ecosystem
+4. Compromise the entire Auctra ecosystem
 
 ## Solution Architecture
 
@@ -26,9 +26,9 @@ The token WASM contract (`soroban_token_contract.wasm`) is imported by three cri
 
 This hash is pinned in three locations:
 
-- `acbu_minting/src/lib.rs` - contractimport! macro
-- `acbu_burning/src/lib.rs` - contractimport! macro
-- `acbu_reserve_tracker/src/lib.rs` - contractimport! macro
+- `auctra_minting/src/lib.rs` - contractimport! macro
+- `auctra_burning/src/lib.rs` - contractimport! macro
+- `auctra_reserve_tracker/src/lib.rs` - contractimport! macro
 
 ### 2. Build-Time Verification
 
@@ -118,7 +118,7 @@ sha256sum soroban_token_contract.wasm
 
 ### 2. Update All Three Locations
 
-**acbu_minting/src/lib.rs**:
+**auctra_minting/src/lib.rs**:
 ```rust
 #[allow(dead_code)]
 pub mod token_contract {
@@ -129,7 +129,7 @@ pub mod token_contract {
 }
 ```
 
-**acbu_burning/src/lib.rs**:
+**auctra_burning/src/lib.rs**:
 ```rust
 #[allow(dead_code)]
 pub mod token_contract {
@@ -140,7 +140,7 @@ pub mod token_contract {
 }
 ```
 
-**acbu_reserve_tracker/src/lib.rs**:
+**auctra_reserve_tracker/src/lib.rs**:
 ```rust
 #[allow(dead_code)]
 pub mod token_contract {
@@ -192,9 +192,9 @@ CI will re-run the same checks automatically via `.github/workflows/verify-wasm-
 - Deployment script verifies hash before deployment
 
 ✅ **Hash is pinned in all three contracts**
-- acbu_minting: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
-- acbu_burning: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
-- acbu_reserve_tracker: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
+- auctra_minting: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
+- auctra_burning: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
+- auctra_reserve_tracker: `sha256 = "6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"`
 
 ✅ **Verification happens at multiple stages**
 - Build time: `build.rs`

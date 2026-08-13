@@ -18,20 +18,20 @@ NC='\033[0m'
 
 # Expected hashes for all contracts
 declare -A EXPECTED_HASHES=(
-    ["acbu_minting"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_burning"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_oracle"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_reserve_tracker"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_savings_vault"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_lending_pool"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
-    ["acbu_escrow"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_minting"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_burning"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_oracle"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_reserve_tracker"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_savings_vault"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_lending_pool"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
+    ["auctra_escrow"]="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
 )
 
 # Token WASM hash
 TOKEN_WASM_HASH="6b14997b915dee21082884cd5a2f1f2f0aef0073d1dcb9c5b3c674cf487fb41d"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║         ACBU Deployment Verification Script                ║${NC}"
+echo -e "${BLUE}║         Auctra Deployment Verification Script                ║${NC}"
 echo -e "${BLUE}║         Verifies contract integrity post-deployment         ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
@@ -88,7 +88,7 @@ echo -e "${YELLOW}[Step 3/3]${NC} Verifying contract imports..."
 echo ""
 
 IMPORTS_OK=true
-for contract in acbu_minting acbu_burning acbu_reserve_tracker; do
+for contract in auctra_minting auctra_burning auctra_reserve_tracker; do
     FILE="$PROJECT_ROOT/$contract/src/lib.rs"
     
     if ! grep -q "sha256 = \"$TOKEN_WASM_HASH\"" "$FILE"; then

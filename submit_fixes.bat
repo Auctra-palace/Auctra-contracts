@@ -1,8 +1,8 @@
 @echo off
 :: =============================================================================
-:: submit_fixes.bat  —  ACBU smart contract fixes (#355, #357, #361, #362)
+:: submit_fixes.bat  —  Auctra smart contract fixes (#355, #357, #361, #362)
 :: Usage: Double-click or run from a command prompt.
-:: Run this from the ROOT of your local acbu-smart-contract clone.
+:: Run this from the ROOT of your local auctra-smart-contract clone.
 :: =============================================================================
 
 setlocal enabledelayedexpansion
@@ -14,8 +14,8 @@ set BASE_BRANCH=dev
 :: Change BASE_BRANCH to "main" above if your repo uses main
 
 :: ── Helpers ───────────────────────────────────────────────────────────────────
-:: FIXES_DIR is relative to this script; adjust if you placed acbu-fixes elsewhere
-set FIXES_DIR=%~dp0acbu-fixes
+:: FIXES_DIR is relative to this script; adjust if you placed auctra-fixes elsewhere
+set FIXES_DIR=%~dp0auctra-fixes
 
 :: ── Pre-flight ────────────────────────────────────────────────────────────────
 echo [INFO] Checking prerequisites...
@@ -28,7 +28,7 @@ if errorlevel 1 (
 
 if not exist "Cargo.toml" (
     echo [ERROR] Cargo.toml not found.
-    echo         Run this script from the root of the acbu-smart-contract repo.
+    echo         Run this script from the root of the auctra-smart-contract repo.
     pause & exit /b 1
 )
 
@@ -65,22 +65,22 @@ if errorlevel 1 ( echo [ERROR] git checkout failed & pause & exit /b 1 )
 :: ── Copy fixed files ──────────────────────────────────────────────────────────
 echo [INFO] Copying fixed source files...
 
-:: acbu_escrow
-if exist "%FIXES_DIR%\acbu_escrow\src\lib.rs" (
-    if not exist "acbu_escrow\src" mkdir "acbu_escrow\src"
-    copy /Y "%FIXES_DIR%\acbu_escrow\src\lib.rs" "acbu_escrow\src\lib.rs" >nul
-    echo [INFO] Copied: acbu_escrow\src\lib.rs
+:: auctra_escrow
+if exist "%FIXES_DIR%\auctra_escrow\src\lib.rs" (
+    if not exist "auctra_escrow\src" mkdir "auctra_escrow\src"
+    copy /Y "%FIXES_DIR%\auctra_escrow\src\lib.rs" "auctra_escrow\src\lib.rs" >nul
+    echo [INFO] Copied: auctra_escrow\src\lib.rs
 ) else (
-    echo [WARN] Not found, skipping: %FIXES_DIR%\acbu_escrow\src\lib.rs
+    echo [WARN] Not found, skipping: %FIXES_DIR%\auctra_escrow\src\lib.rs
 )
 
-:: acbu_minting
-if exist "%FIXES_DIR%\acbu_minting\src\lib.rs" (
-    if not exist "acbu_minting\src" mkdir "acbu_minting\src"
-    copy /Y "%FIXES_DIR%\acbu_minting\src\lib.rs" "acbu_minting\src\lib.rs" >nul
-    echo [INFO] Copied: acbu_minting\src\lib.rs
+:: auctra_minting
+if exist "%FIXES_DIR%\auctra_minting\src\lib.rs" (
+    if not exist "auctra_minting\src" mkdir "auctra_minting\src"
+    copy /Y "%FIXES_DIR%\auctra_minting\src\lib.rs" "auctra_minting\src\lib.rs" >nul
+    echo [INFO] Copied: auctra_minting\src\lib.rs
 ) else (
-    echo [WARN] Not found, skipping: %FIXES_DIR%\acbu_minting\src\lib.rs
+    echo [WARN] Not found, skipping: %FIXES_DIR%\auctra_minting\src\lib.rs
 )
 
 :: shared errors
@@ -94,7 +94,7 @@ if exist "%FIXES_DIR%\shared\src\errors.rs" (
 
 :: ── Stage ─────────────────────────────────────────────────────────────────────
 echo [INFO] Staging changes...
-git add acbu_escrow\src\lib.rs acbu_minting\src\lib.rs shared\src\errors.rs
+git add auctra_escrow\src\lib.rs auctra_minting\src\lib.rs shared\src\errors.rs
 if errorlevel 1 ( echo [ERROR] git add failed & pause & exit /b 1 )
 
 :: Check if there is anything to commit
@@ -121,11 +121,11 @@ echo [OK] Branch pushed successfully.
 echo.
 echo  Next steps:
 echo  1. Open a PR on GitHub:
-echo     https://github.com/Pi-Defi-world/acbu-smart-contract/compare/%BASE_BRANCH%...%BRANCH%
+echo     https://github.com/Pi-Defi-world/auctra-smart-contract/compare/%BASE_BRANCH%...%BRANCH%
 echo.
 echo  2. Or, if you have the GitHub CLI installed:
 echo     gh pr create --base %BASE_BRANCH% --head %BRANCH% ^
 echo       --title "fix: address issues #355 #357 #361 #362" ^
-echo       --body-file acbu-fixes\FIX_SUMMARY.md
+echo       --body-file auctra-fixes\FIX_SUMMARY.md
 echo.
 pause

@@ -1,17 +1,17 @@
-# ACBU Soroban Smart Contracts
+# Auctra Soroban Smart Contracts
 
-Soroban (Stellar) smart contracts for the ACBU (African Currency Basket Unit) stablecoin platform.
+Soroban (Stellar) smart contracts for the Auctra stablecoin platform.
 
 ## Contracts
 
-- **Minting Contract** (`acbu_minting`) — Converts USDC, fiat deposits, and S-token baskets into ACBU
-- **Burning Contract** (`acbu_burning`) — Redeems ACBU back to fiat currency or S-tokens
-- **Oracle Contract** (`acbu_oracle`) — Aggregates exchange rates from multiple validators
-- **Reserve Tracker Contract** (`acbu_reserve_tracker`) — Tracks and verifies reserve balances
-- **Savings Vault Contract** (`acbu_savings_vault`) — Interest-bearing savings accounts for ACBU
-- **Lending Pool Contract** (`acbu_lending_pool`) — Peer-to-peer ACBU lending
-- **Escrow Contract** (`acbu_escrow`) — Conditional and time-locked ACBU transfers
-- **Multisig Contract** (`acbu_multisig`) — M-of-N threshold authorization for admin actions
+- **Minting Contract** (`auctra_minting`) — Converts USDC, fiat deposits, and S-token baskets into Auctra
+- **Burning Contract** (`auctra_burning`) — Redeems Auctra back to fiat currency or S-tokens
+- **Oracle Contract** (`auctra_oracle`) — Aggregates exchange rates from multiple validators
+- **Reserve Tracker Contract** (`auctra_reserve_tracker`) — Tracks and verifies reserve balances
+- **Savings Vault Contract** (`auctra_savings_vault`) — Interest-bearing savings accounts for Auctra
+- **Lending Pool Contract** (`auctra_lending_pool`) — Peer-to-peer Auctra lending
+- **Escrow Contract** (`auctra_escrow`) — Conditional and time-locked Auctra transfers
+- **Multisig Contract** (`auctra_multisig`) — M-of-N threshold authorization for admin actions
 
 ---
 
@@ -53,7 +53,7 @@ The eight contracts are divided into three logical layers:
 
 ## Data Flow
 
-### Minting Flow (USDC → ACBU)
+### Minting Flow (USDC → Auctra)
 
 ```
 User
@@ -61,28 +61,28 @@ User
  │  1. Transfer USDC to MintingContract vault
  ▼
 MintingContract
- │  2. Query ACBU/USD rate          ──────────────► OracleContract
+ │  2. Query Auctra/USD rate          ──────────────► OracleContract
  │  3. Verify reserves sufficient   ──────────────► ReserveTrackerContract
  │                                                       │
  │                                      4. Oracle rate ◄─┘
- │  5. Calculate ACBU amount (rate × USDC, minus fee)
- │  6. Mint ACBU to user            ──────────────► ACBU Token Contract
+ │  5. Calculate Auctra amount (rate × USDC, minus fee)
+ │  6. Mint Auctra to user            ──────────────► Auctra Token Contract
  │  7. Emit MintEvent
  ▼
-User receives ACBU
+User receives Auctra
 ```
 
-### Burning Flow (ACBU → Fiat or S-tokens)
+### Burning Flow (Auctra → Fiat or S-tokens)
 
 ```
 User
  │
- │  1. Transfer ACBU to BurningContract
+ │  1. Transfer Auctra to BurningContract
  ▼
 BurningContract
  │  2. Query currency/USD rate      ──────────────► OracleContract
  │  3. Verify reserves sufficient   ──────────────► ReserveTrackerContract
- │  4. Burn ACBU from user          ──────────────► ACBU Token Contract
+ │  4. Burn Auctra from user          ──────────────► Auctra Token Contract
  │  5a. S-token redemption:
  │       transfer_from vault        ──────────────► S-Token Contract (vault allowance)
  │  5b. Fiat redemption:
@@ -126,7 +126,7 @@ ReserveTrackerContract
  ▼
 MintingContract / BurningContract
  │  5. Call is_sufficient() before each mint or burn
- │     → Ensures reserve_usd ≥ acbu_supply × min_ratio
+ │     → Ensures reserve_usd ≥ auctra_supply × min_ratio
  ▼
 Gate: transaction proceeds only if reserves are adequate
 ```
@@ -148,11 +148,11 @@ Lender
  └─► deposit(amount)          ──► LendingPool records lender liquidity
 
 Borrower + Lender (dual authorization)
- └─► borrow(lender, amount)   ──► LendingPool transfers ACBU to borrower,
+ └─► borrow(lender, amount)   ──► LendingPool transfers Auctra to borrower,
                                    records LoanData (uncollateralized)
 
 Borrower
- └─► repay(loan_id, amount)   ──► LendingPool transfers ACBU back,
+ └─► repay(loan_id, amount)   ──► LendingPool transfers Auctra back,
                                    updates loan balance
 
 Lender
@@ -166,7 +166,7 @@ Creator
  └─► create_escrow(beneficiary, amount, conditions)
           │
           ▼
-     EscrowContract holds ACBU
+     EscrowContract holds Auctra
           │
     ┌─────┴─────────────────────┐
     │ Admin / condition met      │ Admin cancels
@@ -174,7 +174,7 @@ Creator
 release_escrow()          cancel_escrow()
     │                           │
     ▼                           ▼
-Beneficiary receives ACBU   Creator refunded
+Beneficiary receives Auctra   Creator refunded
 ```
 
 ### Multisig Authorization Flow
@@ -200,20 +200,20 @@ Any signer (once threshold met)
 
 | Caller              | Callee              | Method                  | Purpose                              |
 |---------------------|---------------------|-------------------------|--------------------------------------|
-| MintingContract     | OracleContract      | `get_acbu_usd_rate`     | ACBU/USD rate for mint calculation   |
+| MintingContract     | OracleContract      | `get_auctra_usd_rate`     | Auctra/USD rate for mint calculation   |
 | MintingContract     | OracleContract      | `get_rate`              | Per-currency rate for basket mints   |
 | MintingContract     | ReserveTracker      | `is_sufficient`         | Reserve adequacy check before mint   |
 | BurningContract     | OracleContract      | `get_rate`              | Per-currency rate for burn payout    |
 | BurningContract     | ReserveTracker      | `is_sufficient`         | Reserve adequacy check before burn   |
 | ReserveTracker      | OracleContract      | `get_rate`              | Validate reserve value_usd integrity |
-| ReserveTracker      | ACBU Token          | `total_supply`          | Compare supply against reserves      |
+| ReserveTracker      | Auctra Token          | `total_supply`          | Compare supply against reserves      |
 
 ### Cross-Contract Calls (Write / Token Transfers)
 
 | Caller              | Callee              | Action                       | Direction                   |
 |---------------------|---------------------|------------------------------|-----------------------------|
-| MintingContract     | ACBU Token          | `mint(user, amount)`         | Creates new ACBU            |
-| BurningContract     | ACBU Token          | `burn(user, amount)`         | Destroys ACBU               |
+| MintingContract     | Auctra Token          | `mint(user, amount)`         | Creates new Auctra            |
+| BurningContract     | Auctra Token          | `burn(user, amount)`         | Destroys Auctra               |
 | BurningContract     | S-Token Vault       | `transfer_from(vault, user)` | Vault allowance pull model  |
 | MintingContract     | USDC Token          | receive deposit (push model) | User pushes USDC in advance |
 
@@ -311,14 +311,14 @@ After deployment, contract addresses are saved to `.soroban/deployment_{network}
 
 ```
 .
-├── acbu_minting/           # Minting contract
-├── acbu_burning/           # Burning contract
-├── acbu_oracle/            # Oracle contract
-├── acbu_reserve_tracker/   # Reserve tracker contract
-├── acbu_savings_vault/     # Savings vault contract
-├── acbu_lending_pool/      # Lending pool contract
-├── acbu_escrow/            # Escrow contract
-├── acbu_multisig/          # Multisig shared contract
+├── auctra_minting/           # Minting contract
+├── auctra_burning/           # Burning contract
+├── auctra_oracle/            # Oracle contract
+├── auctra_reserve_tracker/   # Reserve tracker contract
+├── auctra_savings_vault/     # Savings vault contract
+├── auctra_lending_pool/      # Lending pool contract
+├── auctra_escrow/            # Escrow contract
+├── auctra_multisig/          # Multisig shared contract
 ├── shared/                 # Shared types and utilities
 ├── scripts/                # Deployment scripts
 ├── docs/                   # Documentation

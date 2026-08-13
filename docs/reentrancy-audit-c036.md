@@ -14,7 +14,7 @@ The Soroban host enforces a call stack that prevents a contract from being re-en
 while it is already on the stack.
 
 However, a weaker class of attack is still relevant: **token-callback state confusion**.
-If a token contract (ACBU or an S-token) executes logic during `transfer` or
+If a token contract (Auctra or an S-token) executes logic during `transfer` or
 `transfer_from` that reads or writes to the *calling* contract's storage, it may
 observe stale state when the calling contract has not yet committed its effects.
 The standard defense is **Checks-Effects-Interactions (CEI)** ordering:
@@ -26,7 +26,7 @@ The standard defense is **Checks-Effects-Interactions (CEI)** ordering:
 All contracts in this repository use the standard Soroban `token::Client` which
 reflects the SEP-41 interface. As of the current version, the SEP-41 token interface
 does not define a receiver callback hook (no `on_transfer` equivalent). This means
-that in practice, the immediate reentrancy risk through the current ACBU and S-token
+that in practice, the immediate reentrancy risk through the current Auctra and S-token
 contracts is low. Nevertheless, CEI ordering is applied throughout as a defensive
 measure and to ensure the codebase remains correct if the token interface evolves.
 
@@ -34,29 +34,29 @@ measure and to ensure the codebase remains correct if the token interface evolve
 
 ## Contract-by-Contract Findings
 
-### 1. `acbu_burning` — `redeem_single` ✅ Sound
+### 1. `auctra_burning` — `redeem_single` ✅ Sound
 
 **Order (before fix):**
 ```
 1. Checks: pause, min amount, oracle freshness, reserve check (invoke_contract × 3)
-2. Interactions: acbu_client.burn(&user, &acbu_amount)
+2. Interactions: auctra_client.burn(&user, &auctra_amount)
 3. Interactions: token.transfer_from(&spender, &vault, &recipient, &stoken_out)
 4. Events
 ```
 
 **Assessment:** The burning contract holds no mutable per-user accounting state.
-The ACBU burn reduces token supply before the s-token payout, which is the correct
+The Auctra burn reduces token supply before the s-token payout, which is the correct
 sequence. Reserve check reads supply *before* the burn (conservative — worst case
 supply), which is safe. No CEI fix required.
 
 ---
 
-### 2. `acbu_burning` — `redeem_basket` ⚠️ Noted — Partial-Failure Risk
+### 2. `auctra_burning` — `redeem_basket` ⚠️ Noted — Partial-Failure Risk
 
 **Order:**
 ```
 1. Checks: oracle freshness, reserve check
-2. Interactions: acbu_client.burn(&user, &acbu_amount)    ← ACBU irrevocably burned
+2. Interactions: auctra_client.burn(&user, &auctra_amount)    ← Auctra irrevocably burned
 3. Loop: for each currency:
        invoke_contract (oracle reads)
        token.transfer_from(&spender, &vault, &recipient, &native_i)   ← per-currency payout
@@ -64,7 +64,7 @@ supply), which is safe. No CEI fix required.
 
 **Assessment:** Not a reentrancy issue (no local state to corrupt), but there is a
 **partial-execution risk**: if any `transfer_from` in the loop panics (e.g., vault
-has insufficient balance for one currency), the user's ACBU has already been burned
+has insufficient balance for one currency), the user's Auctra has already been burned
 but they receive only some of their s-tokens. This is an atomic-batch concern, not a
 reentrancy concern. Tracked separately from C-036; noted here for completeness.
 
@@ -72,7 +72,7 @@ No CEI fix applied to this function.
 
 ---
 
-### 3. `acbu_savings_vault` — `deposit` ✅ Fixed (CEI violation)
+### 3. `auctra_savings_vault` — `deposit` ✅ Fixed (CEI violation)
 
 **Order before fix:**
 ```
@@ -98,7 +98,7 @@ original call resumes.
 
 ---
 
-### 4. `acbu_savings_vault` — `withdraw` ✅ Sound
+### 4. `auctra_savings_vault` — `withdraw` ✅ Sound
 
 **Order:**
 ```
@@ -111,7 +111,7 @@ original call resumes.
 
 ---
 
-### 5. `acbu_lending_pool` — `deposit` / `withdraw` ⚠️ No Per-Lender State
+### 5. `auctra_lending_pool` — `deposit` / `withdraw` ⚠️ No Per-Lender State
 
 **Assessment:** The lending pool does not maintain per-lender balance accounting.
 `deposit` emits an event but writes no balance to storage. `withdraw` performs no
@@ -124,7 +124,7 @@ the absence of state updates is itself a security gap.
 
 ---
 
-### 6. `acbu_escrow` — `create` ✅ Fixed (CEI violation)
+### 6. `auctra_escrow` — `create` ✅ Fixed (CEI violation)
 
 **Order before fix:**
 ```
@@ -144,7 +144,7 @@ write, potentially with different `payee` or `amount` values.
 
 ---
 
-### 7. `acbu_escrow` — `release` ✅ Fixed (CEI violation)
+### 7. `auctra_escrow` — `release` ✅ Fixed (CEI violation)
 
 **Order before fix:**
 ```
@@ -162,7 +162,7 @@ the payee receives a second payout.
 
 ---
 
-### 8. `acbu_escrow` — `refund` ✅ Fixed (CEI violation)
+### 8. `auctra_escrow` — `refund` ✅ Fixed (CEI violation)
 
 **Same violation and fix as `release`.** `env.storage().temporary().remove(&key)`
 moved to before the `client.transfer(...)` call so the escrow cannot be double-refunded.
@@ -173,15 +173,15 @@ moved to before the `client.transfer(...)` call so the escrow cannot be double-r
 
 | Contract | Function | Status | Finding |
 |---|---|---|---|
-| `acbu_burning` | `redeem_single` | ✅ Sound | CEI satisfied; no fix needed |
-| `acbu_burning` | `redeem_basket` | ⚠️ Noted | Partial-execution risk (not reentrancy); separate issue |
-| `acbu_savings_vault` | `deposit` | ✅ Fixed | Storage update moved before token transfers |
-| `acbu_savings_vault` | `withdraw` | ✅ Sound | CEI already satisfied |
-| `acbu_lending_pool` | `deposit` | ⚠️ Noted | No per-lender state; functional gap, not reentrancy |
-| `acbu_lending_pool` | `withdraw` | ⚠️ Noted | No balance check; functional gap, not reentrancy |
-| `acbu_escrow` | `create` | ✅ Fixed | State written before inbound transfer |
-| `acbu_escrow` | `release` | ✅ Fixed | State cleared before outbound transfer |
-| `acbu_escrow` | `refund` | ✅ Fixed | State cleared before outbound transfer |
+| `auctra_burning` | `redeem_single` | ✅ Sound | CEI satisfied; no fix needed |
+| `auctra_burning` | `redeem_basket` | ⚠️ Noted | Partial-execution risk (not reentrancy); separate issue |
+| `auctra_savings_vault` | `deposit` | ✅ Fixed | Storage update moved before token transfers |
+| `auctra_savings_vault` | `withdraw` | ✅ Sound | CEI already satisfied |
+| `auctra_lending_pool` | `deposit` | ⚠️ Noted | No per-lender state; functional gap, not reentrancy |
+| `auctra_lending_pool` | `withdraw` | ⚠️ Noted | No balance check; functional gap, not reentrancy |
+| `auctra_escrow` | `create` | ✅ Fixed | State written before inbound transfer |
+| `auctra_escrow` | `release` | ✅ Fixed | State cleared before outbound transfer |
+| `auctra_escrow` | `refund` | ✅ Fixed | State cleared before outbound transfer |
 
 ## Acceptance Checklist
 

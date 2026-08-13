@@ -2,4 +2,4 @@
 error: failed to select a version for the requirement `soroban-sdk = "=21.0.0"`
   version 21.0.0 is yanked
 location searched: crates.io index
-required by package `acbu_minting v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\acbu-smart-contract\acbu_minting)`
+required by package `auctra_minting v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\auctra-smart-contract\auctra_minting)`

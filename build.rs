@@ -1,4 +1,4 @@
-// Build script for ACBU Smart Contracts
+// Build script for Auctra Smart Contracts
 // Verifies WASM artifact integrity before compilation.
 // Fails fast if hash mismatches to prevent supply chain attacks.
 //
@@ -38,7 +38,7 @@ use std::process::Command;
 
 /// Expected SHA-256 of soroban_token_contract.wasm.
 /// Must match the sha256 field in every contractimport! that references
-/// this artifact (acbu_minting, acbu_burning, acbu_reserve_tracker).
+/// this artifact (auctra_minting, auctra_burning, auctra_reserve_tracker).
 const EXPECTED_HASH: &str = "8331ad752af7ff986f2b9497ac7383c57020bfc80ba19541f4142fc94d1348c1";
 
 const WASM_PATH: &str = "soroban_token_contract.wasm";
@@ -98,9 +98,9 @@ fn main() {
 /// Verify that every contractimport! in source still references the expected hash.
 fn verify_source_hashes() {
     let tagged_files = [
-        "acbu_minting/src/lib.rs",
-        "acbu_burning/src/lib.rs",
-        "acbu_reserve_tracker/src/lib.rs",
+        "auctra_minting/src/lib.rs",
+        "auctra_burning/src/lib.rs",
+        "auctra_reserve_tracker/src/lib.rs",
     ];
 
     for path in &tagged_files {

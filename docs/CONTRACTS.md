@@ -1,6 +1,6 @@
-# ACBU Smart Contracts
+# Auctra Smart Contracts
 
-This document provides an overview of all smart contracts in the ACBU ecosystem.
+This document provides an overview of all smart contracts in the Auctra ecosystem.
 
 ## Building and Testing
 
@@ -28,17 +28,17 @@ See [DEPLOYMENT.md](../DEPLOYMENT.md) for deployment instructions.
 
 ---
 
-## Minting Contract (`acbu_minting`)
+## Minting Contract (`auctra_minting`)
 
-Handles conversion of USDC and fiat deposits into ACBU tokens.
+Handles conversion of USDC and fiat deposits into Auctra tokens.
 
 ### Key Functions
 
 - `initialize`: Configure admin, oracle, reserve tracker, tokens, and fees
-- `mint_from_usdc`: Mint ACBU from USDC deposit
-- `mint_from_fiat`: Mint ACBU from fiat deposit via fintech partner
-- `mint_from_basket`: Mint ACBU by depositing S-tokens in basket proportions
-- `mint_from_single`: Mint ACBU by depositing single S-token
+- `mint_from_usdc`: Mint Auctra from USDC deposit
+- `mint_from_fiat`: Mint Auctra from fiat deposit via fintech partner
+- `mint_from_basket`: Mint Auctra by depositing S-tokens in basket proportions
+- `mint_from_single`: Mint Auctra by depositing single S-token
 - `pause/unpause`: Emergency pause mechanism
 - `set_fee_rate`: Update fee rates
 
@@ -49,24 +49,24 @@ Handles conversion of USDC and fiat deposits into ACBU tokens.
 
 ### Integration
 
-- Oracle Contract: ACBU/USD and currency/USD rates
+- Oracle Contract: Auctra/USD and currency/USD rates
 - Reserve Tracker: Reserve verification
-- ACBU Token: Minting tokens
+- Auctra Token: Minting tokens
 - USDC Token: Receiving deposits
 
 ---
 
-## Burning Contract (`acbu_burning`)
+## Burning Contract (`auctra_burning`)
 
-Handles ACBU token redemption and triggers fiat withdrawals.
+Handles Auctra token redemption and triggers fiat withdrawals.
 
 ### Key Functions
 
 - `initialize`: Configure admin, oracle, reserve tracker, tokens, and fees
-- `burn_for_currency`: Burn ACBU for single currency redemption
-- `burn_for_basket`: Burn ACBU for proportional basket redemption
-- `redeem_single`: Redeem ACBU for single S-token
-- `redeem_basket`: Redeem ACBU for basket of S-tokens
+- `burn_for_currency`: Burn Auctra for single currency redemption
+- `burn_for_basket`: Burn Auctra for proportional basket redemption
+- `redeem_single`: Redeem Auctra for single S-token
+- `redeem_basket`: Redeem Auctra for basket of S-tokens
 - `pause/unpause`: Emergency pause mechanism
 - `set_fee_rate`: Update fee rates
 
@@ -80,12 +80,12 @@ Handles ACBU token redemption and triggers fiat withdrawals.
 
 - Oracle Contract: Currency/USD rates
 - Reserve Tracker: Reserve verification
-- ACBU Token: Burning tokens
+- Auctra Token: Burning tokens
 - Backend: Processing withdrawals via events
 
 ---
 
-## Oracle Contract (`acbu_oracle`)
+## Oracle Contract (`auctra_oracle`)
 
 Aggregates exchange rates from multiple validators and provides rate data.
 
@@ -94,7 +94,7 @@ Aggregates exchange rates from multiple validators and provides rate data.
 - `initialize`: Set up validators, currencies, and basket weights
 - `update_rate`: Update exchange rate (validator function)
 - `get_rate`: Get current rate for a currency
-- `get_acbu_usd_rate`: Get ACBU/USD rate (basket-weighted)
+- `get_auctra_usd_rate`: Get Auctra/USD rate (basket-weighted)
 - `add_validator/remove_validator`: Manage validators
 
 ### Rate Calculation
@@ -102,7 +102,7 @@ Aggregates exchange rates from multiple validators and provides rate data.
 - Median of 3 source rates
 - Outlier detection (>3% deviation)
 - Emergency updates (>5% moves)
-- Basket-weighted ACBU/USD rate
+- Basket-weighted Auctra/USD rate
 
 ### Access Control
 
@@ -112,9 +112,9 @@ Aggregates exchange rates from multiple validators and provides rate data.
 
 ---
 
-## Reserve Tracker Contract (`acbu_reserve_tracker`)
+## Reserve Tracker Contract (`auctra_reserve_tracker`)
 
-Tracks total reserves backing ACBU tokens across multiple currencies.
+Tracks total reserves backing Auctra tokens across multiple currencies.
 
 ### Key Functions
 
@@ -131,7 +131,7 @@ Tracks total reserves backing ACBU tokens across multiple currencies.
 
 ---
 
-## Multisig Contract (`acbu_multisig`)
+## Multisig Contract (`auctra_multisig`)
 
 Provides multi-signature authorization for administrative actions.
 
@@ -151,7 +151,7 @@ Provides multi-signature authorization for administrative actions.
 
 ---
 
-## Escrow Contract (`acbu_escrow`)
+## Escrow Contract (`auctra_escrow`)
 
 Manages escrowed funds for various use cases.
 
@@ -171,28 +171,28 @@ Manages escrowed funds for various use cases.
 
 ---
 
-## Lending Pool Contract (`acbu_lending_pool`)
+## Lending Pool Contract (`auctra_lending_pool`)
 
-Provides peer-to-peer lending functionality for ACBU tokens.
+Provides peer-to-peer lending functionality for Auctra tokens.
 
 ### Key Functions
 
 - `initialize`: Configure admin and token
-- `deposit`: Deposit ACBU into lending pool
-- `withdraw`: Withdraw ACBU from lending pool
-- `borrow`: Borrow ACBU from a specific lender's liquidity (borrower and lender
+- `deposit`: Deposit Auctra into lending pool
+- `withdraw`: Withdraw Auctra from lending pool
+- `borrow`: Borrow Auctra from a specific lender's liquidity (borrower and lender
   must both authorize)
-- `repay`: Repay borrowed ACBU
+- `repay`: Repay borrowed Auctra
 
 ### Features
 
-- Uncollateralized, single-asset lending: liquidity and principal are both ACBU
+- Uncollateralized, single-asset lending: liquidity and principal are both Auctra
 - Interest accrual
 - Pool balance tracking
 
 ### Collateral policy
 
-The pool takes no collateral. Posting ACBU against an ACBU loan locks at least as
+The pool takes no collateral. Posting Auctra against an Auctra loan locks at least as
 much of the borrowed asset as it releases, so it extends no purchasing power and
 gives the lender no protection; the earlier `collateral_amount >= amount` check
 has been removed. Because the loan is unsecured, the lender bears the full credit
@@ -205,15 +205,15 @@ extension, which also requires oracle pricing and a liquidation path. No
 
 ---
 
-## Savings Vault Contract (`acbu_savings_vault`)
+## Savings Vault Contract (`auctra_savings_vault`)
 
-Provides interest-bearing savings accounts for ACBU tokens.
+Provides interest-bearing savings accounts for Auctra tokens.
 
 ### Key Functions
 
 - `initialize`: Configure admin, token, and interest rate
-- `deposit`: Deposit ACBU to earn interest
-- `withdraw`: Withdraw ACBU and accrued interest
+- `deposit`: Deposit Auctra to earn interest
+- `withdraw`: Withdraw Auctra and accrued interest
 - `lock`: Lock deposits for higher interest rates
 - `get_balance`: Query balance and accrued interest
 

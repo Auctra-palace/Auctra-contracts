@@ -5,9 +5,9 @@ on:
     branches: [ main, develop ]
     paths:
       - 'soroban_token_contract.wasm'
-      - 'acbu_minting/src/lib.rs'
-      - 'acbu_burning/src/lib.rs'
-      - 'acbu_reserve_tracker/src/lib.rs'
+      - 'auctra_minting/src/lib.rs'
+      - 'auctra_burning/src/lib.rs'
+      - 'auctra_reserve_tracker/src/lib.rs'
       - 'scripts/check_budget.sh'
       - 'rust-toolchain.toml'
       - '**/Cargo.toml'
@@ -16,9 +16,9 @@ on:
     branches: [ main, develop ]
     paths:
       - 'soroban_token_contract.wasm'
-      - 'acbu_minting/src/lib.rs'
-      - 'acbu_burning/src/lib.rs'
-      - 'acbu_reserve_tracker/src/lib.rs'
+      - 'auctra_minting/src/lib.rs'
+      - 'auctra_burning/src/lib.rs'
+      - 'auctra_reserve_tracker/src/lib.rs'
       - 'scripts/check_budget.sh'
       - 'rust-toolchain.toml'
       - '**/Cargo.toml'
@@ -68,7 +68,7 @@ jobs:
           
           echo "Checking hash consistency in contract imports..."
           
-          for contract in acbu_minting acbu_burning acbu_reserve_tracker; do
+          for contract in auctra_minting auctra_burning auctra_reserve_tracker; do
             FILE="$contract/src/lib.rs"
             if ! grep -q "sha256 = \"$EXPECTED_HASH\"" "$FILE"; then
               echo "❌ FAIL: Hash mismatch in $FILE"
@@ -143,7 +143,7 @@ jobs:
         run: |
           echo "Verifying build artifacts..."
           
-          for contract in acbu_minting acbu_burning acbu_oracle acbu_reserve_tracker acbu_savings_vault acbu_lending_pool acbu_escrow; do
+          for contract in auctra_minting auctra_burning auctra_oracle auctra_reserve_tracker auctra_savings_vault auctra_lending_pool auctra_escrow; do
             WASM="target/wasm32-unknown-unknown/release/$contract.wasm"
             if [ ! -f "$WASM" ]; then
               echo "❌ FAIL: Build artifact missing: $WASM"

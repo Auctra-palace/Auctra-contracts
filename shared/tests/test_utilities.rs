@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use shared::{calculate_amount_after_fee, calculate_fee, calculate_deviation, BASIS_POINTS};
+use shared::{calculate_amount_after_fee, calculate_deviation, calculate_fee, BASIS_POINTS};
 
 #[test]
 fn test_calculate_fee_zero_fee_rate() {

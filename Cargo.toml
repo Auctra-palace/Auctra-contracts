@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "acbu_minting",
-    "acbu_burning",
-    "acbu_oracle",
-    "acbu_reserve_tracker",
-    "acbu_savings_vault",
-    "acbu_lending_pool",
-    "acbu_escrow",
-    "acbu_multisig",
+    "auctra_minting",
+    "auctra_burning",
+    "auctra_oracle",
+    "auctra_reserve_tracker",
+    "auctra_savings_vault",
+    "auctra_lending_pool",
+    "auctra_escrow",
+    "auctra_multisig",
     "shared",
 ]
 resolver = "2"

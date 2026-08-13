@@ -5,8 +5,8 @@
 //! This test verifies the complete lifecycle:
 //! 1. Oracle provides rates
 //! 2. Reserve tracker validates reserves
-//! 3. Minting contract mints ACBU via oracle rate
-//! 4. Burning contract burns ACBU back to fiat
+//! 3. Minting contract mints Auctra via oracle rate
+//! 4. Burning contract burns Auctra back to fiat
 //!
 //! Addresses issue #24: No end-to-end test that mints via oracle rate,
 //! verifies reserves, then burns to fiat.
@@ -18,10 +18,10 @@ use soroban_sdk::{
 };
 
 // Import contract clients
-use acbu_minting::{MintingContract, MintingContractClient};
-use acbu_burning::{BurningContract, BurningContractClient};
-use acbu_oracle::{OracleContract, OracleContractClient};
-use acbu_reserve_tracker::{ReserveTracker, ReserveTrackerClient};
+use auctra_minting::{MintingContract, MintingContractClient};
+use auctra_burning::{BurningContract, BurningContractClient};
+use auctra_oracle::{OracleContract, OracleContractClient};
+use auctra_reserve_tracker::{ReserveTracker, ReserveTrackerClient};
 use shared::{CurrencyCode, DECIMALS};
 
 /// Setup complete system with all contracts
@@ -32,7 +32,7 @@ fn setup_system() -> (
     OracleContractClient,
     ReserveTrackerClient,
     Address, // admin
-    Address, // acbu_token
+    Address, // auctra_token
     Address, // usdc_token
     Address, // vault
     Address, // treasury
@@ -46,8 +46,8 @@ fn setup_system() -> (
 
     let admin = Address::generate(&env);
 
-    // Deploy ACBU token (Stellar Asset Contract)
-    let acbu_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    // Deploy Auctra token (Stellar Asset Contract)
+    let auctra_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
     
     // Deploy USDC token
     let usdc_token = env.register_stellar_asset_contract_v2(admin.clone()).address();
@@ -108,7 +108,7 @@ fn setup_system() -> (
         &admin,
         &oracle_id,
         &reserve_tracker_id,
-        &acbu_token,
+        &auctra_token,
         &usdc_token,
         &vault,
         &treasury,
@@ -123,7 +123,7 @@ fn setup_system() -> (
         &admin,
         &oracle_id,
         &reserve_tracker_id,
-        &acbu_token,
+        &auctra_token,
         &vault,
         &treasury,
         &300i128, // 3% fee
@@ -136,7 +136,7 @@ fn setup_system() -> (
         oracle_client,
         reserve_tracker_client,
         admin,
-        acbu_token,
+        auctra_token,
         usdc_token,
         vault,
         treasury,
@@ -152,7 +152,7 @@ fn test_mint_usdc_verify_reserves_burn_to_fiat() {
         oracle_client,
         reserve_tracker_client,
         admin,
-        acbu_token,
+        auctra_token,
         usdc_token,
         _vault,
         _treasury,
@@ -166,16 +166,16 @@ fn test_mint_usdc_verify_reserves_burn_to_fiat() {
     usdc_admin.mint(&user, &usdc_amount);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Mint ACBU from USDC
+    // STEP 1: Mint Auctra from USDC
     // ═══════════════════════════════════════════════════════════════════════
 
-    let acbu_minted = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
-    assert!(acbu_minted > 0, "ACBU should be minted");
+    let auctra_minted = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
+    assert!(auctra_minted > 0, "Auctra should be minted");
 
-    // Verify user received ACBU
-    let acbu_client = TokenClient::new(&env, &acbu_token);
-    let user_acbu_balance = acbu_client.balance(&user);
-    assert_eq!(user_acbu_balance, acbu_minted, "user_acbu_balance should equal acbu_minted");
+    // Verify user received Auctra
+    let auctra_client = TokenClient::new(&env, &auctra_token);
+    let user_auctra_balance = auctra_client.balance(&user);
+    assert_eq!(user_auctra_balance, auctra_minted, "user_auctra_balance should equal auctra_minted");
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 2: Verify reserves are sufficient
@@ -186,18 +186,18 @@ fn test_mint_usdc_verify_reserves_burn_to_fiat() {
     assert!(reserves_sufficient, "Reserves should be sufficient after mint");
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Burn ACBU back to fiat
+    // STEP 3: Burn Auctra back to fiat
     // ═══════════════════════════════════════════════════════════════════════
 
     let ngn = CurrencyCode::new(&env, "NGN");
-    let burn_amount = acbu_minted / 2; // Burn half
+    let burn_amount = auctra_minted / 2; // Burn half
 
     let local_amount = burning_client.burn_to_fiat(&user, &burn_amount, &ngn);
     assert!(local_amount > 0, "Should receive local currency amount");
 
-    // Verify user's ACBU balance decreased
-    let user_acbu_balance_after_burn = acbu_client.balance(&user);
-    assert!(user_acbu_balance_after_burn < user_acbu_balance, "ACBU balance should decrease after burn");
+    // Verify user's Auctra balance decreased
+    let user_auctra_balance_after_burn = auctra_client.balance(&user);
+    assert!(user_auctra_balance_after_burn < user_auctra_balance, "Auctra balance should decrease after burn");
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4: Verify reserves are still sufficient
@@ -219,7 +219,7 @@ fn test_mint_from_basket_burn_to_basket() {
         oracle_client,
         reserve_tracker_client,
         admin,
-        acbu_token,
+        auctra_token,
         _usdc_token,
         vault,
         _treasury,
@@ -243,14 +243,14 @@ fn test_mint_from_basket_burn_to_basket() {
     kes_admin.mint(&user, &(10_000 * DECIMALS));
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 1: Mint ACBU from basket
+    // STEP 1: Mint Auctra from basket
     // ═══════════════════════════════════════════════════════════════════════
 
-    let acbu_amount = 1_000 * DECIMALS;
+    let auctra_amount = 1_000 * DECIMALS;
     let proof_id = soroban_sdk::String::from_str(&env, "proof_123");
 
-    let minted = minting_client.mint_from_basket(&user, &user, &acbu_amount, &proof_id);
-    assert_eq!(minted, acbu_amount, "minted should equal acbu_amount");
+    let minted = minting_client.mint_from_basket(&user, &user, &auctra_amount, &proof_id);
+    assert_eq!(minted, auctra_amount, "minted should equal auctra_amount");
 
     // Verify S-tokens were transferred to vault
     let ngn_client = TokenClient::new(&env, &ngn_token);
@@ -267,10 +267,10 @@ fn test_mint_from_basket_burn_to_basket() {
     assert!(reserves_sufficient, "Reserves should be sufficient");
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Burn ACBU for basket
+    // STEP 3: Burn Auctra for basket
     // ═══════════════════════════════════════════════════════════════════════
 
-    let burn_amount = acbu_amount / 2;
+    let burn_amount = auctra_amount / 2;
     let mut recipients = Vec::new(&env);
     recipients.push_back(user.clone());
 
@@ -279,10 +279,10 @@ fn test_mint_from_basket_burn_to_basket() {
 
     burning_client.burn_for_basket(&user, &burn_amount, &recipients, &amounts);
 
-    // Verify ACBU was burned
-    let acbu_client = TokenClient::new(&env, &acbu_token);
-    let user_balance = acbu_client.balance(&user);
-    assert!(user_balance < acbu_amount, "ACBU should be burned");
+    // Verify Auctra was burned
+    let auctra_client = TokenClient::new(&env, &auctra_token);
+    let user_balance = auctra_client.balance(&user);
+    assert!(user_balance < auctra_amount, "Auctra should be burned");
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4: Verify final reserves
@@ -302,7 +302,7 @@ fn test_mint_exceeds_reserves_fails() {
         _oracle_client,
         reserve_tracker_client,
         admin,
-        _acbu_token,
+        _auctra_token,
         usdc_token,
         _vault,
         _treasury,
@@ -330,7 +330,7 @@ fn test_oracle_rate_affects_mint_burn_amounts() {
         oracle_client,
         _reserve_tracker_client,
         admin,
-        acbu_token,
+        auctra_token,
         usdc_token,
         _vault,
         _treasury,
@@ -347,7 +347,7 @@ fn test_oracle_rate_affects_mint_burn_amounts() {
     // STEP 1: Mint at initial rate
     // ═══════════════════════════════════════════════════════════════════════
 
-    let acbu_minted_1 = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
+    let auctra_minted_1 = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 2: Update oracle rate (double the rate)
@@ -376,19 +376,19 @@ fn test_oracle_rate_affects_mint_burn_amounts() {
     // STEP 3: Mint at new rate
     // ═══════════════════════════════════════════════════════════════════════
 
-    let acbu_minted_2 = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
+    let auctra_minted_2 = minting_client.mint_from_usdc(&user, &usdc_amount, &user);
 
-    // With doubled rate, should get less ACBU for same USDC
-    assert!(acbu_minted_2 < acbu_minted_1, "Should get less ACBU when rate increases");
+    // With doubled rate, should get less Auctra for same USDC
+    assert!(auctra_minted_2 < auctra_minted_1, "Should get less Auctra when rate increases");
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4: Burn and verify rate affects local currency amount
     // ═══════════════════════════════════════════════════════════════════════
 
-    let burn_amount = acbu_minted_2;
+    let burn_amount = auctra_minted_2;
     let local_amount = burning_client.burn_to_fiat(&user, &burn_amount, &ngn);
 
-    // With doubled rate, should get more NGN for same ACBU
+    // With doubled rate, should get more NGN for same Auctra
     assert!(local_amount > 0, "Should receive local currency");
 }
 
@@ -401,7 +401,7 @@ fn test_complete_lifecycle_multiple_users() {
         oracle_client,
         reserve_tracker_client,
         admin,
-        acbu_token,
+        auctra_token,
         usdc_token,
         _vault,
         _treasury,
@@ -412,7 +412,7 @@ fn test_complete_lifecycle_multiple_users() {
     let user3 = Address::generate(&env);
 
     let usdc_admin = StellarAssetClient::new(&env, &usdc_token);
-    let acbu_client = TokenClient::new(&env, &acbu_token);
+    let auctra_client = TokenClient::new(&env, &auctra_token);
 
     // ═══════════════════════════════════════════════════════════════════════
     // Multiple users mint
@@ -422,15 +422,15 @@ fn test_complete_lifecycle_multiple_users() {
     usdc_admin.mint(&user2, &(2_000 * DECIMALS));
     usdc_admin.mint(&user3, &(3_000 * DECIMALS));
 
-    let acbu1 = minting_client.mint_from_usdc(&user1, &(1_000 * DECIMALS), &user1);
-    let acbu2 = minting_client.mint_from_usdc(&user2, &(2_000 * DECIMALS), &user2);
-    let acbu3 = minting_client.mint_from_usdc(&user3, &(3_000 * DECIMALS), &user3);
+    let auctra1 = minting_client.mint_from_usdc(&user1, &(1_000 * DECIMALS), &user1);
+    let auctra2 = minting_client.mint_from_usdc(&user2, &(2_000 * DECIMALS), &user2);
+    let auctra3 = minting_client.mint_from_usdc(&user3, &(3_000 * DECIMALS), &user3);
 
-    assert!(acbu1 > 0 && acbu2 > 0 && acbu3 > 0);
+    assert!(auctra1 > 0 && auctra2 > 0 && auctra3 > 0);
 
     // Verify total supply
     let total_supply = minting_client.get_total_supply();
-    assert!(total_supply >= acbu1 + acbu2 + acbu3);
+    assert!(total_supply >= auctra1 + auctra2 + auctra3);
 
     // ═══════════════════════════════════════════════════════════════════════
     // Multiple users burn
@@ -438,14 +438,14 @@ fn test_complete_lifecycle_multiple_users() {
 
     let ngn = CurrencyCode::new(&env, "NGN");
 
-    burning_client.burn_to_fiat(&user1, &(acbu1 / 2), &ngn);
-    burning_client.burn_to_fiat(&user2, &(acbu2 / 2), &ngn);
-    burning_client.burn_to_fiat(&user3, &(acbu3 / 2), &ngn);
+    burning_client.burn_to_fiat(&user1, &(auctra1 / 2), &ngn);
+    burning_client.burn_to_fiat(&user2, &(auctra2 / 2), &ngn);
+    burning_client.burn_to_fiat(&user3, &(auctra3 / 2), &ngn);
 
     // Verify balances decreased
-    assert!(acbu_client.balance(&user1) < acbu1);
-    assert!(acbu_client.balance(&user2) < acbu2);
-    assert!(acbu_client.balance(&user3) < acbu3);
+    assert!(auctra_client.balance(&user1) < auctra1);
+    assert!(auctra_client.balance(&user2) < auctra2);
+    assert!(auctra_client.balance(&user3) < auctra3);
 
     // Verify reserves still sufficient
     let final_supply = minting_client.get_total_supply();

@@ -12,7 +12,7 @@ MINTING="CDMP4TQHVYBO2QVGLRBGFJWDCUVYW6N6W4QKBPJBUQAMSPMBH53ATTSP"
 BURNING="CD5WQGBEX3HUH7INUXK4LVMVTK7OIPAQZHJDIRKZNINXNWTBSFSYU2N3"
 ESCROW="CDMOYTXKPH342MZ5W4A4XZFCV3Q5H52AMVQR4OSF3J76JCLPBRWXQD4H"
 RESERVE_TRACKER="CAXWKQCLIKG5TFYYJCWDVTW7B4LXYBRCXDWYLKCIILMG2BTZK6YQ3DMH"
-ACBU_TOKEN="CB2RDXQAIQT5XG3XTRHKAGLMV24TPLCOKBFXVELF2PJS4K42UYXZT6KI"
+AUCTRA_TOKEN="CB2RDXQAIQT5XG3XTRHKAGLMV24TPLCOKBFXVELF2PJS4K42UYXZT6KI"
 USDC_TOKEN="CCW67Z7YIEXZFYUCP66X37O6E6U74N54JDXC2KUC5365S3XYR7O5L6YI"
 
 echo "--- Starting Initialization via Bash ---"
@@ -40,7 +40,7 @@ stellar contract invoke \
   --admin "$ADMIN" \
   --oracle "$ORACLE" \
   --reserve_tracker "$RESERVE_TRACKER" \
-  --acbu_token "$ACBU_TOKEN" \
+  --auctra_token "$AUCTRA_TOKEN" \
   --usdc_token "$USDC_TOKEN" \
   --vault "$ADMIN" \
   --treasury "$ADMIN" \
@@ -57,7 +57,7 @@ stellar contract invoke \
   --admin "$ADMIN" \
   --oracle "$ORACLE" \
   --reserve_tracker "$RESERVE_TRACKER" \
-  --acbu_token "$ACBU_TOKEN" \
+  --auctra_token "$AUCTRA_TOKEN" \
   --withdrawal_processor "$ADMIN" \
   --vault "$ADMIN" \
   --fee_rate_bps 30 \
@@ -71,6 +71,6 @@ stellar contract invoke \
   --source "$SECRET" \
   -- initialize \
   --admin "$ADMIN" \
-  --acbu_token "$ACBU_TOKEN"
+  --auctra_token "$AUCTRA_TOKEN"
 
 echo "--- Initialization complete ---"

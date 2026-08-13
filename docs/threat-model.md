@@ -1,4 +1,4 @@
-# ACBU Smart Contract — Threat Model & Authorization Invocation Tree
+# Auctra Smart Contract — Threat Model & Authorization Invocation Tree
 
 **Issue:** C-038  
 **Severity:** High  
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-This document describes the authorization invocation tree for all cross-contract calls in the ACBU protocol, the trust assumptions each call relies on, and the mitigations in place. It is the acceptance artifact for issue C-038.
+This document describes the authorization invocation tree for all cross-contract calls in the Auctra protocol, the trust assumptions each call relies on, and the mitigations in place. It is the acceptance artifact for issue C-038.
 
 ---
 
@@ -32,7 +32,7 @@ This document describes the authorization invocation tree for all cross-contract
        │ (rate feed)│          │   TRACKER    │        │    CONTRACT      │
        └─────┬──────┘          └──────┬───────┘        └────────┬─────────┘
              │                        │                          │
-             │ get_acbu_usd_rate_*    │ is_reserve_sufficient   │ StellarAssetClient::mint
+             │ get_auctra_usd_rate_*    │ is_reserve_sufficient   │ StellarAssetClient::mint
              │ get_rate_with_timestamp│                          │ token::Client::transfer
              │ get_currencies         │                          │
              │ get_basket_weight      │                          │
@@ -40,7 +40,7 @@ This document describes the authorization invocation tree for all cross-contract
              └────────────────────────┘                          │
                                                                   ▼
                                                          ┌──────────────────┐
-                                                         │   ACBU SAC       │
+                                                         │   Auctra SAC       │
                                                          │ (Stellar Asset   │
                                                          │  Contract)       │
                                                          └──────────────────┘
@@ -59,7 +59,7 @@ This document describes the authorization invocation tree for all cross-contract
 
 | Call | Method | Auth requirement | Staleness guard |
 |------|--------|-----------------|-----------------|
-| Get ACBU/USD rate | `get_acbu_usd_rate_with_timestamp` | None (read-only) | `check_oracle_freshness` — panics if `now > oracle_ts + UPDATE_INTERVAL_SECONDS` |
+| Get Auctra/USD rate | `get_auctra_usd_rate_with_ts` | None (read-only) | `check_oracle_freshness` — panics if `now > oracle_ts + UPDATE_INTERVAL_SECONDS` |
 | Get currency rate | `get_rate_with_timestamp` | None (read-only) | Same freshness check |
 | Get currencies list | `get_currencies` | None (read-only) | — |
 | Get basket weight | `get_basket_weight` | None (read-only) | — |
@@ -67,7 +67,7 @@ This document describes the authorization invocation tree for all cross-contract
 
 **Trust assumption:** The oracle contract address stored at initialization is correct and has not been replaced. Admin is responsible for setting the correct oracle address.
 
-**Threat:** A compromised oracle could return manipulated rates, causing ACBU to be minted at an incorrect price.  
+**Threat:** A compromised oracle could return manipulated rates, causing Auctra to be minted at an incorrect price.  
 **Mitigation:** Freshness checks on every rate read; oracle uses multi-validator median aggregation with outlier detection.
 
 ---
@@ -78,23 +78,23 @@ This document describes the authorization invocation tree for all cross-contract
 |------|--------|-----------------|-------|
 | Reserve sufficiency check | `is_reserve_sufficient(projected_supply)` | None (read-only) | Panics if `!reserve_ok` |
 
-**Trust assumption:** The reserve tracker address stored at initialization is correct. The reserve tracker itself calls the oracle for the ACBU/USD rate.
+**Trust assumption:** The reserve tracker address stored at initialization is correct. The reserve tracker itself calls the oracle for the Auctra/USD rate.
 
 **Threat:** A malicious reserve tracker could always return `true`, bypassing the collateral check.  
 **Mitigation:** Reserve tracker address is set at initialization by admin and cannot be changed without an upgrade.
 
 ---
 
-### 3.3 Minting Contract → ACBU Stellar Asset Contract (SAC)
+### 3.3 Minting Contract → Auctra Stellar Asset Contract (SAC)
 
 | Call | Method | Auth requirement |
 |------|--------|-----------------|
-| Mint ACBU to recipient | `StellarAssetClient::mint(&recipient, &amount)` | **This contract must be the SAC issuer or an authorized minter.** The Soroban auth tree is: `admin/issuer → minting_contract`. |
-| Mint fee ACBU to treasury | `StellarAssetClient::mint(&treasury, &fee)` | Same as above. |
+| Mint Auctra to recipient | `StellarAssetClient::mint(&recipient, &amount)` | **This contract must be the SAC issuer or an authorized minter.** The Soroban auth tree is: `admin/issuer → minting_contract`. |
+| Mint fee Auctra to treasury | `StellarAssetClient::mint(&treasury, &fee)` | Same as above. |
 
-**Trust assumption:** The minting contract address has been granted minter authority on the ACBU SAC by the issuer account. This is a deployment-time configuration step.
+**Trust assumption:** The minting contract address has been granted minter authority on the Auctra SAC by the issuer account. This is a deployment-time configuration step.
 
-**Threat:** If the wrong contract is granted minter authority, unauthorized ACBU can be minted.  
+**Threat:** If the wrong contract is granted minter authority, unauthorized Auctra can be minted.  
 **Mitigation:** Minter authority is granted by the issuer (admin multisig) and should be audited at deployment. Only one contract should hold minter authority at any time.
 
 **Auth tree for `mint_from_usdc`:**
@@ -119,14 +119,14 @@ Transaction invoker (user)
 Transaction invoker (user)
   └─ user.require_auth()                    [minting contract checks]
        ├─ token::Client::transfer(user → vault, s_token_amount)
-       └─ StellarAssetClient::mint(recipient, acbu_amount)
+       └─ StellarAssetClient::mint(recipient, auctra_amount)
 ```
 
 **Auth tree for `mint_from_fiat` / `mint_from_demo_fiat`:**
 ```
 Transaction invoker (operator)
   └─ operator.require_auth()                [minting contract checks]
-       └─ StellarAssetClient::mint(recipient, acbu_amount)
+       └─ StellarAssetClient::mint(recipient, auctra_amount)
             └─ [SAC checks: invoker == minter]
 ```
 
@@ -143,13 +143,13 @@ Transaction invoker (operator)
 
 ---
 
-### 3.5 Burning Contract → ACBU Token
+### 3.5 Burning Contract → Auctra Token
 
 | Call | Method | Auth requirement |
 |------|--------|-----------------|
-| Burn ACBU from user | `token::Client::burn(&user, &acbu_amount)` | `user.require_auth()` must be called before this. Soroban propagates the auth context so the token contract sees the user's authorization. |
+| Burn Auctra from user | `token::Client::burn(&user, &auctra_amount)` | `user.require_auth()` must be called before this. Soroban propagates the auth context so the token contract sees the user's authorization. |
 
-**Trust assumption:** The ACBU token address stored at initialization is the correct SAC. The `burn` function on the SAC requires the caller to be authorized by the token holder (`user`).
+**Trust assumption:** The Auctra token address stored at initialization is the correct SAC. The `burn` function on the SAC requires the caller to be authorized by the token holder (`user`).
 
 **Auth tree for `redeem_single` / `redeem_basket`:**
 ```
@@ -176,7 +176,7 @@ Transaction invoker (user)
 ```
 Transaction invoker (user)
   └─ user.require_auth()                         [burning contract checks]
-       ├─ token::Client::burn(user, acbu_amount)  [SAC: user authorized]
+       ├─ token::Client::burn(user, auctra_amount)  [SAC: user authorized]
        └─ token::Client::transfer_from(
               spender=burning_contract,
               from=vault,
@@ -191,25 +191,25 @@ Transaction invoker (user)
 
 | Call | Method | Auth requirement |
 |------|--------|-----------------|
-| Get ACBU/USD rate | `get_acbu_usd_rate` | None (read-only) |
+| Get Auctra/USD rate | `get_auctra_usd_rate` | None (read-only) |
 
 **Note:** `is_reserve_sufficient` is called by minting/burning contracts. The reserve tracker in turn calls the oracle. This creates a two-hop cross-contract call chain:
 
 ```
 minting_contract
   └─ reserve_tracker::is_reserve_sufficient(projected_supply)
-       └─ oracle::get_acbu_usd_rate()
+       └─ oracle::get_auctra_usd_rate()
 ```
 
 No auth is required on the read-only oracle call. The chain is safe as long as both addresses are correctly configured.
 
 ---
 
-### 3.8 Reserve Tracker → ACBU Token
+### 3.8 Reserve Tracker → Auctra Token
 
 | Call | Method | Auth requirement |
 |------|--------|-----------------|
-| Get total supply | `env.invoke_contract(acbu_token, "get_total_supply", [])` | None (read-only) |
+| Get total supply | `env.invoke_contract(auctra_token, "get_total_supply", [])` | None (read-only) |
 
 **Note:** `get_total_supply` is a read-only call. No auth required.
 
@@ -224,7 +224,7 @@ No auth is required on the read-only oracle call. The chain is safe as long as b
 
 ### 4.2 Unauthorized Burn
 
-**Scenario:** An attacker calls `redeem_single(user=victim, ...)` to burn the victim's ACBU.  
+**Scenario:** An attacker calls `redeem_single(user=victim, ...)` to burn the victim's Auctra.  
 **Mitigation:** `user.require_auth()` is called at the top of every burn entrypoint. The victim's signature is required.
 
 ### 4.3 Operator Impersonation in `mint_from_fiat`
@@ -258,27 +258,27 @@ No auth is required on the read-only oracle call. The chain is safe as long as b
 
 Before deploying to mainnet, verify:
 
-- [ ] Minting contract address is granted minter authority on the ACBU SAC by the issuer account
+- [ ] Minting contract address is granted minter authority on the Auctra SAC by the issuer account
 - [ ] Vault account has approved the burning contract as a spender for every S-token in the basket, with a bounded allowance
 - [ ] Oracle address stored in minting, burning, and reserve tracker contracts is the correct deployed oracle
 - [ ] Reserve tracker address stored in minting and burning contracts is the correct deployed reserve tracker
 - [ ] Operator address stored in the minting contract is the correct fintech backend key
 - [ ] Admin is a multisig with at least 2-of-3 signers
-- [ ] No other contract or account holds minter authority on the ACBU SAC
+- [ ] No other contract or account holds minter authority on the Auctra SAC
 
 ---
 
 ## 6. Changes Made for C-038
 
-1. **`acbu_minting/src/lib.rs` — `mint_from_fiat`**: Replaced non-timestamped oracle calls (`get_acbu_usd_rate`, `get_rate`) with timestamped variants (`get_acbu_usd_rate_with_timestamp`, `get_rate_with_timestamp`) and added `check_oracle_freshness` calls. This closes the stale-rate exploitation window on the fiat mint path.
+1. **`auctra_minting/src/lib.rs` — `mint_from_fiat`**: Replaced non-timestamped oracle calls (`get_auctra_usd_rate`, `get_rate`) with timestamped variants (`get_auctra_usd_rate_with_ts`, `get_rate_with_timestamp`) and added `check_oracle_freshness` calls. This closes the stale-rate exploitation window on the fiat mint path.
 
-2. **`acbu_minting/src/lib.rs` — `mint_from_usdc`, `mint_from_basket`**: Added inline comments documenting the `StellarAssetClient::mint` auth tree requirement (this contract must be the SAC minter).
+2. **`auctra_minting/src/lib.rs` — `mint_from_usdc`, `mint_from_basket`**: Added inline comments documenting the `StellarAssetClient::mint` auth tree requirement (this contract must be the SAC minter).
 
-3. **`acbu_minting/src/lib.rs` — `mint_from_basket`**: Added inline comment documenting the `token::Client::transfer` auth propagation requirement for S-token pulls from `user`.
+3. **`auctra_minting/src/lib.rs` — `mint_from_basket`**: Added inline comment documenting the `token::Client::transfer` auth propagation requirement for S-token pulls from `user`.
 
-4. **`acbu_burning/src/lib.rs` — `redeem_single`**: Added inline comments documenting the `burn` auth tree and the `transfer_from` vault-approval trust assumption.
+4. **`auctra_burning/src/lib.rs` — `redeem_single`**: Added inline comments documenting the `burn` auth tree and the `transfer_from` vault-approval trust assumption.
 
-5. **`acbu_burning/src/lib.rs` — `redeem_basket`**: Added inline comments documenting the `burn` auth tree and the `transfer_from` vault-approval trust assumption for each basket leg.
+5. **`auctra_burning/src/lib.rs` — `redeem_basket`**: Added inline comments documenting the `burn` auth tree and the `transfer_from` vault-approval trust assumption for each basket leg.
 
 6. **`docs/threat-model.md`** (this file): Created comprehensive threat model documenting all cross-contract call auth trees, trust assumptions, wrong-invoker scenarios, and deployment checklist.
 

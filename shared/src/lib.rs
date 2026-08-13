@@ -24,7 +24,7 @@ pub enum DataKey {
 // ---------------------------------------------------------------------------
 // C-043 — Emergency multisig for admin operations
 //
-// These shared types are used by the `acbu_multisig` contract and referenced
+// These shared types are used by the `auctra_multisig` contract and referenced
 // by every contract that delegates admin authority to a multisig address.
 //
 // Design:
@@ -152,7 +152,7 @@ pub struct AccountDetails {
 ///
 /// **Backend / indexer alignment:** Map XDR or RPC event fields to these names in order. All
 /// `i128` amounts use **7 decimal places** (`DECIMALS` = 10_000_000 per whole unit). `rate` is
-/// the ACBU/USD rate in the same fixed-point form. `usdc_amount` is USDC in 7 decimals for
+/// the Auctra/USD rate in the same fixed-point form. `usdc_amount` is USDC in 7 decimals for
 /// `mint_from_usdc`; for Afreum S-token mint paths it carries the USD-equivalent notional
 /// (still 7-decimal fixed point).
 #[contracttype]
@@ -160,7 +160,7 @@ pub struct MintEvent {
     pub transaction_id: SorobanString,
     pub user: Address,
     pub usdc_amount: i128,
-    pub acbu_amount: i128,
+    pub auctra_amount: i128,
     pub fee: i128,
     pub rate: i128,
     pub timestamp: u64,
@@ -170,20 +170,20 @@ pub struct MintEvent {
 ///
 /// **Contract topics (Soroban):** `(Symbol \"burn\", Address user)` — matches the `user` field.
 ///
-/// **Backend / indexer alignment:** Same field order as XDR struct encoding. Amounts (`acbu_amount`,
+/// **Backend / indexer alignment:** Same field order as XDR struct encoding. Amounts (`auctra_amount`,
 /// `local_amount`, `fee`, `rate`) are **7-decimal fixed point** (`DECIMALS`). `currency` is
 /// [`CurrencyCode`] (string code such as `"NGN"`). For `burn_for_basket`, one event is emitted per
-/// recipient slice; `acbu_amount` and `fee` are the portions for that slice, not necessarily the
+/// recipient slice; `auctra_amount` and `fee` are the portions for that slice, not necessarily the
 /// full transaction totals.
 #[contracttype]
 pub struct BurnEvent {
     pub transaction_id: SorobanString,
     pub user: Address,
-    /// Gross ACBU amount submitted for redemption (before fee deduction).
-    pub acbu_amount: i128,
-    /// Net ACBU after fee deduction (acbu_amount - fee). Emitted so indexers can
-    /// verify acbu_amount - fee == net_acbu without re-deriving off-chain.
-    pub net_acbu: i128,
+    /// Gross Auctra amount submitted for redemption (before fee deduction).
+    pub auctra_amount: i128,
+    /// Net Auctra after fee deduction (auctra_amount - fee). Emitted so indexers can
+    /// verify auctra_amount - fee == net_auctra without re-deriving off-chain.
+    pub net_auctra: i128,
     pub local_amount: i128,
     pub currency: CurrencyCode,
     pub fee: i128,
@@ -341,8 +341,8 @@ pub fn check_oracle_freshness(
 
 /// Cross-contract method name constants — prevents silent logic splits from typos
 /// when the same string is used in multiple contracts to call shared interfaces.
-pub const ORACLE_GET_ACBU_RATE: &str = "get_acbu_usd_rate";
-pub const ORACLE_GET_ACBU_RATE_WITH_TS: &str = "get_acbu_usd_rate_with_timestamp";
+pub const ORACLE_GET_AUCTRA_RATE: &str = "get_auctra_usd_rate";
+pub const ORACLE_GET_AUCTRA_RATE_WITH_TS: &str = "get_auctra_usd_rate_with_ts";
 pub const ORACLE_GET_RATE: &str = "get_rate";
 pub const ORACLE_GET_RATE_WITH_TS: &str = "get_rate_with_timestamp";
 pub const ORACLE_GET_CURRENCIES: &str = "get_currencies";
@@ -357,8 +357,8 @@ pub const BASIS_POINTS: i128 = 10_000;
 pub const DECIMALS: i128 = 10_000_000; // 7 decimals
 pub const MIN_MINT_AMOUNT: i128 = 10_000_000; // 10 USDC (7 decimals)
 pub const MAX_MINT_AMOUNT: i128 = 1_000_000_000_000; // 1M USDC (7 decimals)
-pub const MAX_TOTAL_SUPPLY: i128 = 1_000_000_000_0_000_000; // 1 billion ACBU (7 decimals)
-pub const MIN_BURN_AMOUNT: i128 = 10_000_000; // 10 ACBU (7 decimals)
+pub const MAX_TOTAL_SUPPLY: i128 = 1_000_000_000_0_000_000; // 1 billion Auctra (7 decimals)
+pub const MIN_BURN_AMOUNT: i128 = 10_000_000; // 10 Auctra (7 decimals)
 pub const UPDATE_INTERVAL_SECONDS: u64 = 21_600; // 6 hours
 pub const EMERGENCY_THRESHOLD_BPS: i128 = 500; // 5% deviation threshold
 pub const OUTLIER_THRESHOLD_BPS: i128 = 300; // 3% deviation for outlier detection
@@ -403,15 +403,30 @@ pub fn median(mut values: soroban_sdk::Vec<i128>) -> Option<i128> {
 
     if n % 2 == 0 {
         // For even count, find two middle elements and average them
-        quickselect_inplace(&mut values, 0, i32::try_from(n - 1).unwrap_or(0), i32::try_from(mid - 1).unwrap_or(0));
+        quickselect_inplace(
+            &mut values,
+            0,
+            i32::try_from(n - 1).unwrap_or(0),
+            i32::try_from(mid - 1).unwrap_or(0),
+        );
         let val1 = values.get(mid - 1)?;
-        quickselect_inplace(&mut values, 0, i32::try_from(n - 1).unwrap_or(0), i32::try_from(mid).unwrap_or(0));
+        quickselect_inplace(
+            &mut values,
+            0,
+            i32::try_from(n - 1).unwrap_or(0),
+            i32::try_from(mid).unwrap_or(0),
+        );
         let val2 = values.get(mid)?;
         // SC-020: use checked arithmetic — (val1 + val2) can overflow i128 for extreme rates.
         val1.checked_add(val2).and_then(|sum| sum.checked_div(2))
     } else {
         // For odd count, find the middle element
-        quickselect_inplace(&mut values, 0, i32::try_from(n - 1).unwrap_or(0), i32::try_from(mid).unwrap_or(0));
+        quickselect_inplace(
+            &mut values,
+            0,
+            i32::try_from(n - 1).unwrap_or(0),
+            i32::try_from(mid).unwrap_or(0),
+        );
         Some(values.get(mid)?)
     }
 }

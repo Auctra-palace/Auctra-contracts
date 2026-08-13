@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# submit_fixes.sh  —  ACBU smart contract fixes (#355, #357, #361, #362)
+# submit_fixes.sh  —  Auctra smart contract fixes (#355, #357, #361, #362)
 # Usage: chmod +x submit_fixes.sh && ./submit_fixes.sh
-# Run this from the ROOT of your local acbu-smart-contract clone.
+# Run this from the ROOT of your local auctra-smart-contract clone.
 # =============================================================================
 
 set -euo pipefail
@@ -23,7 +23,7 @@ info "Checking prerequisites..."
 command -v git  >/dev/null 2>&1 || die "git not found"
 command -v curl >/dev/null 2>&1 || warn "curl not found — skipping GitHub CLI check"
 
-[ -f "Cargo.toml" ] || die "Run this script from the root of the acbu-smart-contract repo"
+[ -f "Cargo.toml" ] || die "Run this script from the root of the auctra-smart-contract repo"
 
 # Ensure working tree is clean before we start
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -43,7 +43,7 @@ else
 fi
 
 # ── Copy fixed files ──────────────────────────────────────────────────────────
-FIXES_DIR="$(dirname "$0")/acbu-fixes"   # adjust path if needed
+FIXES_DIR="$(dirname "$0")/auctra-fixes"   # adjust path if needed
 
 copy_if_exists() {
   local src="$1" dst="$2"
@@ -57,15 +57,15 @@ copy_if_exists() {
 }
 
 info "Copying fixed source files..."
-copy_if_exists "$FIXES_DIR/acbu_escrow/src/lib.rs"  "acbu_escrow/src/lib.rs"
-copy_if_exists "$FIXES_DIR/acbu_minting/src/lib.rs" "acbu_minting/src/lib.rs"
+copy_if_exists "$FIXES_DIR/auctra_escrow/src/lib.rs"  "auctra_escrow/src/lib.rs"
+copy_if_exists "$FIXES_DIR/auctra_minting/src/lib.rs" "auctra_minting/src/lib.rs"
 copy_if_exists "$FIXES_DIR/shared/src/errors.rs"    "shared/src/errors.rs"
 
 # ── Stage & commit ────────────────────────────────────────────────────────────
 info "Staging changes..."
 git add \
-  acbu_escrow/src/lib.rs \
-  acbu_minting/src/lib.rs \
+  auctra_escrow/src/lib.rs \
+  auctra_minting/src/lib.rs \
   shared/src/errors.rs
 
 # Only commit if there is actually something staged
@@ -104,10 +104,10 @@ echo -e "${GREEN}✓ Branch pushed successfully.${NC}"
 echo ""
 echo "  Next steps:"
 echo "  1. Open a PR on GitHub:"
-echo "     https://github.com/Pi-Defi-world/acbu-smart-contract/compare/$BASE_BRANCH...$BRANCH"
+echo "     https://github.com/Pi-Defi-world/auctra-smart-contract/compare/$BASE_BRANCH...$BRANCH"
 echo "  2. Use the PR description below (copy from FIX_SUMMARY.md)."
 echo ""
 echo "  Or if you have the GitHub CLI (gh) installed, run:"
 echo "  gh pr create --base $BASE_BRANCH --head $BRANCH \\"
 echo "    --title 'fix: address issues #355 #357 #361 #362' \\"
-echo "    --body-file acbu-fixes/FIX_SUMMARY.md"
+echo "    --body-file auctra-fixes/FIX_SUMMARY.md"

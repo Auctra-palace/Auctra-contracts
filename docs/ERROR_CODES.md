@@ -28,7 +28,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | ---: | --- | --- |
 | 6001 | `ReentrantCall` | reentrant call detected |
 
-## `acbu_multisig` - `Error`
+## `auctra_multisig` - `Error`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -46,7 +46,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 4012 | `DuplicateSigner` | duplicate signer |
 | 4999 | `Unknown` | unknown multisig error |
 
-## `acbu_savings_vault` - `Error`
+## `auctra_savings_vault` - `Error`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -74,7 +74,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 1022 | `InsufficientYieldReserve` | vault balance cannot cover principal + yield owed |
 | 1999 | `Unknown` | unknown savings vault error |
 
-## `acbu_lending_pool` - `Error`
+## `auctra_lending_pool` - `Error`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -96,7 +96,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 2016 | `DustBalance` | dust balance |
 | 2999 | `Unknown` | unknown lending pool error |
 
-## `acbu_escrow` - `EscrowError`
+## `auctra_escrow` - `EscrowError`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -106,7 +106,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 3004 | `PayerMismatch` | payer mismatch |
 | 3005 | `EscrowExists` | escrow already exists |
 | 3006 | `UninitializedAdmin` | escrow admin not initialized |
-| 3007 | `UninitializedAcBuToken` | escrow token not initialized |
+| 3007 | `UninitializedAuctraToken` | escrow token not initialized |
 | 3008 | `AlreadyInitialized` | escrow already initialized |
 | 3009 | `TimelockNotElapsed` | timelock has not elapsed |
 | 3010 | `NoPendingUpgrade` | no pending upgrade |
@@ -119,7 +119,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 3017 | `SelfEscrow` | payee cannot be the same as payer |
 | 3999 | `Unknown` | unknown escrow error |
 
-## `acbu_minting` - `MintingError`
+## `auctra_minting` - `MintingError`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -150,7 +150,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 5025 | `SupplyMismatch` | supplied value does not match on-chain supply |
 | 5999 | `Unknown` | unknown minting error |
 
-## `acbu_oracle` - `OracleError`
+## `auctra_oracle` - `OracleError`
 
 | Code | Variant | Description |
 | ---: | --- | --- |
@@ -180,7 +180,7 @@ Clients map `invoke_contract` / simulation failures using the contract error `u3
 | 7024 | `CurrencyNotRegistered` | currency not registered |
 | 7999 | `Unknown` | unknown oracle error |
 
-## `acbu_reserve_tracker` - `ReserveTrackerError`
+## `auctra_reserve_tracker` - `ReserveTrackerError`
 
 | Code | Variant | Description |
 | ---: | --- | --- |

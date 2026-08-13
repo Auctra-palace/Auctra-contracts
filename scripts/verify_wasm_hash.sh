@@ -48,7 +48,7 @@ if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
     echo "  1. Verify the source of soroban_token_contract.wasm"
     echo "  2. If intentionally updated, run: sha256sum soroban_token_contract.wasm"
     echo "  3. Update EXPECTED_HASH in this script and all contract imports"
-    echo "  4. Update: acbu_minting/src/lib.rs, acbu_burning/src/lib.rs, acbu_reserve_tracker/src/lib.rs"
+    echo "  4. Update: auctra_minting/src/lib.rs, auctra_burning/src/lib.rs, auctra_reserve_tracker/src/lib.rs"
     exit 1
 fi
 

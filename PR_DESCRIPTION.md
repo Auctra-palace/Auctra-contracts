@@ -27,7 +27,7 @@ pub struct OutlierDetectionEvent {
 }
 ```
 
-#### 2. **Outlier Detection Logic** (`acbu_oracle/src/lib.rs`)
+#### 2. **Outlier Detection Logic** (`auctra_oracle/src/lib.rs`)
 In the `update_rate` function, after calculating the median:
 - Iterate through each source rate
 - Calculate deviation from median using `calculate_deviation()`
@@ -53,7 +53,7 @@ for i in 0..sources.len() {
 }
 ```
 
-#### 3. **Test Coverage** (`acbu_oracle/tests/test.rs`)
+#### 3. **Test Coverage** (`auctra_oracle/tests/test.rs`)
 Added `test_outlier_detection()` that:
 - Provides three source rates with one significant outlier
 - Verifies the contract correctly identifies and emits the outlier event
@@ -101,8 +101,8 @@ All 19 existing tests pass + 1 new test:
 ## Files Modified
 
 1. `shared/src/lib.rs` - Added `OutlierDetectionEvent` struct
-2. `acbu_oracle/src/lib.rs` - Implemented outlier detection and event emission
-3. `acbu_oracle/tests/test.rs` - Added comprehensive outlier detection test
+2. `auctra_oracle/src/lib.rs` - Implemented outlier detection and event emission
+3. `auctra_oracle/tests/test.rs` - Added comprehensive outlier detection test
 
 ## Breaking Changes
 

@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use acbu_oracle::{OracleContract, OracleContractClient};
+use auctra_oracle::{OracleContract, OracleContractClient};
 use shared::{CurrencyCode, OutlierDetectionEvent, RateUpdateEvent, STALE_RATE_MAX_LEDGERS};
 use soroban_sdk::{
     symbol_short,
@@ -412,11 +412,11 @@ fn test_get_s_token_address_not_configured_fails() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ACBU RATE CALCULATION TESTS
+// Auctra RATE CALCULATION TESTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_get_acbu_usd_rate_basket_weighted() {
+fn test_get_auctra_usd_rate_basket_weighted() {
     let (env, client, _contract_id, _admin, validators) = setup();
 
     let validator = validators.get(0).unwrap();
@@ -437,12 +437,12 @@ fn test_get_acbu_usd_rate_basket_weighted() {
     client.update_rate(&validator, &kes, &2_000_000i128, &kes_sources, &env.ledger().timestamp());
 
     // Basket is 50% NGN (1.0) + 50% KES (2.0) = 1.5
-    let acbu_rate = client.get_acbu_usd_rate();
-    assert_eq!(acbu_rate, 1_500_000);
+    let auctra_rate = client.get_auctra_usd_rate();
+    assert_eq!(auctra_rate, 1_500_000);
 }
 
 #[test]
-fn test_get_acbu_usd_rate_with_timestamp() {
+fn test_get_auctra_usd_rate_with_ts() {
     let (env, client, _contract_id, _admin, validators) = setup();
 
     let validator = validators.get(0).unwrap();
@@ -461,7 +461,7 @@ fn test_get_acbu_usd_rate_with_timestamp() {
     kes_sources.push_back(2_000_000i128);
     client.update_rate(&validator, &kes, &2_000_000i128, &kes_sources, &env.ledger().timestamp());
 
-    let (rate, timestamp) = client.get_acbu_usd_rate_with_timestamp();
+    let (rate, timestamp) = client.get_auctra_usd_rate_with_ts();
     // Weighted average: (1_000_000 * 5000 + 2_000_000 * 5000) / 10_000 / 10_000
     // = (5_000_000_000 + 10_000_000_000) / 10_000 / 10_000
     // = 15_000_000_000 / 100_000_000 = 150
@@ -538,7 +538,7 @@ fn test_admin_override_refreshes_stale_rate() {
 }
 
 #[test]
-fn test_stale_basket_component_blocks_acbu_rate() {
+fn test_stale_basket_component_blocks_auctra_rate() {
     let (env, client, contract_id, _admin, validators) = setup();
 
     let validator = validators.get(0).unwrap();
@@ -553,7 +553,7 @@ fn test_stale_basket_component_blocks_acbu_rate() {
     // Advance past staleness
     advance_ledger_to(&env, &contract_id, 100 + STALE_RATE_MAX_LEDGERS + 1);
 
-    let result = client.try_get_acbu_usd_rate_with_timestamp();
+    let result = client.try_get_auctra_usd_rate_with_ts();
     assert!(result.is_err());
 }
 

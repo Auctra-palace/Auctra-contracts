@@ -1,6 +1,6 @@
 # Contract Deployment Guide
 
-This guide walks you through deploying ACBU Soroban smart contracts to Stellar testnet and mainnet.
+This guide walks you through deploying Auctra Soroban smart contracts to Stellar testnet and mainnet.
 
 ## Prerequisites
 
@@ -120,7 +120,7 @@ soroban contract invoke \
   --source <admin-secret-key> \
   -- initialize \
   --admin <admin-address> \
-  --acbu_token <acbu-token-contract-id> \
+  --auctra_token <auctra-token-contract-id> \
   --min_ratio_bps 10200 \
   --target_ratio_bps 10500
 ```
@@ -136,7 +136,7 @@ soroban contract invoke \
   --admin <admin-address> \
   --oracle <oracle-contract-id> \
   --reserve_tracker <reserve-tracker-contract-id> \
-  --acbu_token <acbu-token-contract-id> \
+  --auctra_token <auctra-token-contract-id> \
   --usdc_token <usdc-token-contract-id> \
   --fee_rate_bps 300
 ```
@@ -152,7 +152,7 @@ soroban contract invoke \
   --admin <admin-address> \
   --oracle <oracle-contract-id> \
   --reserve_tracker <reserve-tracker-contract-id> \
-  --acbu_token <acbu-token-contract-id> \
+  --auctra_token <auctra-token-contract-id> \
   --withdrawal_processor <withdrawal-processor-address> \
   --fee_rate_bps 300
 ```

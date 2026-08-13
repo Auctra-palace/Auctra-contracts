@@ -1,6 +1,6 @@
 # Smart Contract Upgrade Runbook
 
-This document outlines the procedures for safely upgrading smart contracts within the ACBU ecosystem using the unified versioning and migration framework.
+This document outlines the procedures for safely upgrading smart contracts within the Auctra ecosystem using the unified versioning and migration framework.
 
 ## Overview
 

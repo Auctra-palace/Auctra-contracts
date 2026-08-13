@@ -1,4 +1,4 @@
-# ACBU Smart Contracts (Soroban) — Full Repository / Project Guide
+# Auctra Smart Contracts (Soroban) — Full Repository / Project Guide
 
 > **Scope**: This document explains the repository contents end-to-end: workspace structure, each contract crate, shared types, tests, build & deployment flow, and how the security model ties all components together.
 >
@@ -8,17 +8,17 @@
 
 ## 1. What this repo is
 
-This repository is a Rust workspace containing multiple Soroban smart contracts that implement the core on-chain components of the **ACBU** (African Currency Basket Unit) protocol.
+This repository is a Rust workspace containing multiple Soroban smart contracts that implement the core on-chain components of the **Auctra** protocol.
 
 At a high level, the system is a stablecoin-like protocol that supports:
 
-- **Minting** ACBU from different deposit sources (USDC deposits, Afreum-style basket S-token deposits, and fiat flows mediated by a fintech operator).
-- **Burning / Redemption** of ACBU back into Afreum S-tokens (single currency or basket redemption).
+- **Minting** Auctra from different deposit sources (USDC deposits, Afreum-style basket S-token deposits, and fiat flows mediated by a fintech operator).
+- **Burning / Redemption** of Auctra back into Afreum S-tokens (single currency or basket redemption).
 - **Oracle-based pricing** for exchange rates needed to compute mint/burn amounts.
 - **Reserve tracking** to enforce an overcollateralization policy.
 - Additional optional protocol components:
   - **Savings vault** (term-based deposits with yield accrual).
-  - **Lending pool** (a basic peer-to-peer, uncollateralized ACBU lending protocol).
+  - **Lending pool** (a basic peer-to-peer, uncollateralized Auctra lending protocol).
   - **Escrow** (merchant/e-commerce style payment escrow).
 - **Multisig administration** to protect privileged actions (pause, upgrades, parameter changes).
 
@@ -30,14 +30,14 @@ All contracts interact using explicit **cross-contract calls** and rely heavily 
 
 The root `Cargo.toml` defines a workspace with multiple member crates:
 
-- `acbu_minting`
-- `acbu_burning`
-- `acbu_oracle`
-- `acbu_reserve_tracker`
-- `acbu_savings_vault`
-- `acbu_lending_pool`
-- `acbu_escrow`
-- `acbu_multisig`
+- `auctra_minting`
+- `auctra_burning`
+- `auctra_oracle`
+- `auctra_reserve_tracker`
+- `auctra_savings_vault`
+- `auctra_lending_pool`
+- `auctra_escrow`
+- `auctra_multisig`
 - `shared`
 
 The repository also contains:
@@ -117,7 +117,7 @@ The file includes:
   - `OutlierDetectionEvent`
 - **Shared error type**: `ContractError` (used by the burning contract and potentially re-used).
 - **Cross-contract method name constants** (string method identifiers to prevent typos):
-  - `ORACLE_GET_ACBU_RATE`, `ORACLE_GET_ACBU_RATE_WITH_TS`
+  - `ORACLE_GET_AUCTRA_RATE`, `ORACLE_GET_AUCTRA_RATE_WITH_TS`
   - `ORACLE_GET_RATE`, `ORACLE_GET_RATE_WITH_TS`
   - `ORACLE_GET_CURRENCIES`
   - `ORACLE_GET_BASKET_WEIGHT`
@@ -140,25 +140,25 @@ The file includes:
 
 ---
 
-## 6. Contract: Minting (`acbu_minting/`)
+## 6. Contract: Minting (`auctra_minting/`)
 
-The minting contract is the “front door” for creating ACBU.
+The minting contract is the “front door” for creating Auctra.
 
 ### 6.1 Responsibilities
 
-- Accept deposit inputs and mint ACBU to a recipient.
+- Accept deposit inputs and mint Auctra to a recipient.
 - Compute mint amounts using oracle pricing.
 - Enforce reserve sufficiency before minting.
-- Collect fees and mint fee ACBU to a treasury.
+- Collect fees and mint fee Auctra to a treasury.
 - Emit `MintEvent` for backend processing.
 - Provide admin/operator controls (pause, fee configuration, upgrades).
 
-### 6.2 Entry points (from `acbu_minting/src/lib.rs`)
+### 6.2 Entry points (from `auctra_minting/src/lib.rs`)
 
 The contract defines multiple minting flows:
 
 1. **`initialize`**
-   - Sets admin, oracle, reserve tracker, token addresses (ACBU, USDC), vault, treasury.
+   - Sets admin, oracle, reserve tracker, token addresses (Auctra, USDC), vault, treasury.
    - Sets fee rates (`fee_rate_bps` and `fee_single_bps`).
    - Initializes supply tracking, paused state, and mint amount bounds.
 
@@ -166,25 +166,25 @@ The contract defines multiple minting flows:
    - User authorizes (`user.require_auth()`).
    - Validates recipient is an account (intent: avoid minting to contract addresses that cannot receive token transfers).
    - Checks `min_mint_amount` / `max_mint_amount`.
-   - Calls oracle for ACBU/USD **with timestamp** and checks freshness.
-   - Computes ACBU amount from USDC minus fee.
+   - Calls oracle for Auctra/USD **with timestamp** and checks freshness.
+   - Computes Auctra amount from USDC minus fee.
    - Calls reserve tracker `is_reserve_sufficient(projected_supply)`.
-   - Transfers USDC into the contract, then mints ACBU via `StellarAssetClient::mint`.
+   - Transfers USDC into the contract, then mints Auctra via `StellarAssetClient::mint`.
    - Emits `MintEvent`.
 
 3. **`mint_from_basket`**
    - User auth + proof tracking for basket deposits.
    - Pulls each Afreum S-token leg from the user into the minting contract’s vault according to oracle weights.
    - Uses oracle rates with freshness checks.
-   - Reserve check and then mints net ACBU to recipient; fee ACBU to treasury.
+   - Reserve check and then mints net Auctra to recipient; fee Auctra to treasury.
    - Emits `MintEvent`.
 
 4. **`mint_from_single`**
    - Single-currency Afreum S-token deposit.
    - Computes USD gross from `(s_token_amount * rate) / DECIMALS`.
    - Applies a higher fee tier `fee_single`.
-   - Converts USD to ACBU using ACBU/USD oracle rate.
-   - Transfers the S-token into the vault and mints ACBU.
+   - Converts USD to Auctra using Auctra/USD oracle rate.
+   - Transfers the S-token into the vault and mints Auctra.
    - Emits `MintEvent`.
 
 5. **`mint_from_demo_fiat`**
@@ -201,7 +201,7 @@ The contract defines multiple minting flows:
    - Calls oracle timestamped functions and enforces freshness.
    - Enforces min/max amount.
    - Calls reserve tracker.
-   - Mints ACBU to recipient and mints fee ACBU to treasury.
+   - Mints Auctra to recipient and mints fee Auctra to treasury.
    - Marks `fintech_tx_id` as processed.
    - Emits `MintEvent`.
 
@@ -227,13 +227,13 @@ In this repo, multiple contracts follow a similar approach.
 
 ---
 
-## 7. Contract: Burning (`acbu_burning/`)
+## 7. Contract: Burning (`auctra_burning/`)
 
-The burning contract handles ACBU redemption into Afreum S-tokens (either one currency or the full basket).
+The burning contract handles Auctra redemption into Afreum S-tokens (either one currency or the full basket).
 
 ### 7.1 Responsibilities
 
-- Burn ACBU from the user.
+- Burn Auctra from the user.
 - Redeem into local currency represented by Afreum S-tokens.
 - Validate oracle freshness before calculating redemption outputs.
 - Verify protocol health by calling reserve tracker.
@@ -250,20 +250,20 @@ The burning contract handles ACBU redemption into Afreum S-tokens (either one cu
 
 2. **`redeem_single`**
    - `user.require_auth()`.
-   - Validates `acbu_amount >= min_burn_amount`.
+   - Validates `auctra_amount >= min_burn_amount`.
    - Gets oracle rates with freshness checks.
-   - Computes stoken output from net acbu and rates.
+   - Computes stoken output from net auctra and rates.
    - Calls reserve tracker (enforces solvency).
-   - Burns ACBU with `acbu_client.burn(&user, &acbu_amount)`.
+   - Burns Auctra with `auctra_client.burn(&user, &auctra_amount)`.
    - Pulls S-tokens from vault to the user/recipient via `transfer_from`.
-   - Emits `BurnEvent` with gross and net ACBU fields.
+   - Emits `BurnEvent` with gross and net Auctra fields.
 
 3. **`redeem_basket`**
    - `user.require_auth()`.
    - Validates non-empty recipients and no duplicate recipient addresses.
    - Validates oracle freshness.
    - Computes fees at basket level and then slices outputs per-currency by weights.
-   - Burns ACBU.
+   - Burns Auctra.
    - For each basket currency:
      - Computes currency output and per-leg fee.
      - Uses oracle s-token address and calls `transfer_from` from vault.
@@ -272,7 +272,7 @@ The burning contract handles ACBU redemption into Afreum S-tokens (either one cu
 4. **Admin controls**
    - pause/unpause
    - fee rate setters
-   - dependency updaters (oracle, reserve tracker, acbu token, vault)
+   - dependency updaters (oracle, reserve tracker, auctra token, vault)
    - `upgrade`
 
 ### 7.3 Important token transfer trust assumption (vault approvals)
@@ -286,7 +286,7 @@ This trust assumption is documented in `docs/threat-model.md`.
 
 ---
 
-## 8. Contract: Oracle (`acbu_oracle/`)
+## 8. Contract: Oracle (`auctra_oracle/`)
 
 The oracle contract aggregates exchange rates from multiple validators and provides derived basket pricing.
 
@@ -299,7 +299,7 @@ The oracle contract aggregates exchange rates from multiple validators and provi
 - Enforce rate staleness at read time.
 - Provide:
   - currency/USD rates
-  - ACBU/USD basket-weighted rate
+  - Auctra/USD basket-weighted rate
 
 ### 8.2 Entry points and admin controls
 
@@ -330,8 +330,8 @@ The oracle contract aggregates exchange rates from multiple validators and provi
    - Reads rate from storage.
    - Enforces staleness using ledger age.
 
-5. **`get_acbu_usd_rate_with_timestamp` / `get_acbu_usd_rate`**
-   - Computes a basket-weighted ACBU/USD rate.
+5. **`get_auctra_usd_rate_with_ts` / `get_auctra_usd_rate`**
+   - Computes a basket-weighted Auctra/USD rate.
    - Each basket component must itself be fresh.
 
 6. **Validator management**
@@ -343,7 +343,7 @@ The oracle contract aggregates exchange rates from multiple validators and provi
 
 ---
 
-## 9. Contract: Reserve Tracker (`acbu_reserve_tracker/`)
+## 9. Contract: Reserve Tracker (`auctra_reserve_tracker/`)
 
 The reserve tracker maintains reserve balances for each supported currency and verifies if reserves meet the protocol’s required overcollateralization ratio.
 
@@ -354,13 +354,13 @@ The reserve tracker maintains reserve balances for each supported currency and v
   - USD value
   - timestamp
 - Provide total reserve USD value.
-- Verify reserves against ACBU total supply.
+- Verify reserves against Auctra total supply.
 - Enforce a minimum reserve ratio.
 
 ### 9.2 Key entry points
 
-- `initialize(admin, oracle, acbu_token, min_reserve_ratio_bps)`
-  - Stores admin, oracle, acbu token.
+- `initialize(admin, oracle, auctra_token, min_reserve_ratio_bps)`
+  - Stores admin, oracle, auctra token.
   - Sets reserve map.
 
 - `update_reserve(env, _updater, currency, amount, value_usd)`
@@ -368,14 +368,14 @@ The reserve tracker maintains reserve balances for each supported currency and v
   - Updates reserve record and emits a `reserve` event.
 
 - `verify_reserves(env)`
-  - Reads ACBU total supply from the ACBU token contract.
+  - Reads Auctra total supply from the Auctra token contract.
   - If supply is zero, it panics with `ZeroSupply`.
   - Calls `is_reserve_sufficient`.
 
-- `is_reserve_sufficient(env, total_acbu_supply)`
+- `is_reserve_sufficient(env, total_auctra_supply)`
   - Aggregates total reserve USD value.
-  - Fetches ACBU/USD oracle rate via oracle contract.
-  - Computes `total_acbu_usd` and checks `current_ratio >= min_reserve_ratio`.
+  - Fetches Auctra/USD oracle rate via oracle contract.
+  - Computes `total_auctra_usd` and checks `current_ratio >= min_reserve_ratio`.
 
 > The minting contract uses `RESERVE_IS_SUFFICIENT` cross-contract call to validate projected supply before minting.
 
@@ -383,13 +383,13 @@ The reserve tracker maintains reserve balances for each supported currency and v
 
 ## 10. Optional protocol contracts
 
-### 10.1 Savings vault (`acbu_savings_vault/`)
+### 10.1 Savings vault (`auctra_savings_vault/`)
 
-This contract locks ACBU for term-based deposits and accrues yield.
+This contract locks Auctra for term-based deposits and accrues yield.
 
 Main entry points:
 
-- `initialize(admin, acbu_token, fee_rate_bps, yield_rate_bps)`
+- `initialize(admin, auctra_token, fee_rate_bps, yield_rate_bps)`
 - `deposit(user, amount, term_seconds)`
 - `withdraw(user, term_seconds, amount)`
 - `get_balance(user, term_seconds)`
@@ -403,11 +403,11 @@ Yield model:
 
 > The contract file shows some inconsistencies/duplicate signatures in the snippet output, but the overall contract intent is clear: time-locked deposits with yield computed on unlock.
 
-### 10.2 Lending pool (`acbu_lending_pool/`)
+### 10.2 Lending pool (`auctra_lending_pool/`)
 
 This contract provides simplified lending features:
 
-- `initialize(admin, acbu_token, fee_rate_bps)`
+- `initialize(admin, auctra_token, fee_rate_bps)`
 - `deposit(lender, amount)`
 - `withdraw(lender, amount)`
 - `borrow(borrower, lender, amount, loan_id)`
@@ -423,9 +423,9 @@ The contract stores:
 Collateral policy (in the borrow entrypoint):
 
 - The pool is **single-asset and uncollateralized**. Both the liquidity and the
-  loan principal are ACBU, and no collateral is taken.
-- An earlier iteration pulled a `collateral_amount` of ACBU and required
-  `collateral_amount >= amount` before paying out the same ACBU token. That is a
+  loan principal are Auctra, and no collateral is taken.
+- An earlier iteration pulled a `collateral_amount` of Auctra and required
+  `collateral_amount >= amount` before paying out the same Auctra token. That is a
   degenerate arrangement — it locks at least as much of the borrowed asset as it
   releases, so it extends no purchasing power and offers the lender no protection
   — and there was no liquidation path able to seize it. It has been removed.
@@ -438,11 +438,11 @@ Collateral policy (in the borrow entrypoint):
   extension, which additionally needs oracle pricing and a liquidation path.
 - There is no `liquidate()` entrypoint yet; an unrepaid loan simply stays open.
 
-### 10.3 Escrow (`acbu_escrow/`)
+### 10.3 Escrow (`auctra_escrow/`)
 
 This is an escrow contract for merchants:
 
-- `initialize(admin, acbu_token)`
+- `initialize(admin, auctra_token)`
 - `create(payer, payee, amount, escrow_id)`
 - `release(escrow_id, payer)`
 - `refund(escrow_id, payer)` (admin only)
@@ -452,11 +452,11 @@ Important design point:
 - Uses temporary storage keyed by `EscrowId(payer, escrow_id)`.
 - Implements CEI ordering (commit escrow state before external transfer; remove record before releasing/refunding) to prevent re-entrancy/replay within contract logic.
 
-### 10.4 Emergency multisig (`acbu_multisig/`)
+### 10.4 Emergency multisig (`auctra_multisig/`)
 
 Admin protection is critical.
 
-`acbu_multisig` implements a standalone M-of-N multisig guard.
+`auctra_multisig` implements a standalone M-of-N multisig guard.
 
 Other contracts:
 
@@ -483,8 +483,8 @@ The repository has:
   - `integration_rounding.rs`
 
 - Per-contract test directories:
-  - `acbu_minting/tests/`
-  - `acbu_burning/tests/`
+  - `auctra_minting/tests/`
+  - `auctra_burning/tests/`
   - etc.
 
 These tests validate:
@@ -563,16 +563,16 @@ When reading the code, the fastest path is:
 
 - `shared/src/lib.rs`:
   - constants, event payloads, helper math
-- `acbu_oracle/src/lib.rs`:
+- `auctra_oracle/src/lib.rs`:
   - rate storage + freshness rules
-- `acbu_reserve_tracker/src/lib.rs`:
+- `auctra_reserve_tracker/src/lib.rs`:
   - reserve ratio check + total supply read
-- `acbu_minting/src/lib.rs`:
+- `auctra_minting/src/lib.rs`:
   - mint entrypoints and fiat replay/validation rules
-- `acbu_burning/src/lib.rs`:
+- `auctra_burning/src/lib.rs`:
   - burn entrypoints and vault transfer mechanics
 - Optional contracts:
-  - `acbu_savings_vault/`, `acbu_lending_pool/`, `acbu_escrow/`
+  - `auctra_savings_vault/`, `auctra_lending_pool/`, `auctra_escrow/`
 - `docs/threat-model.md`:
   - read this after skimming contract code to understand why each auth call exists.
 
@@ -580,7 +580,7 @@ When reading the code, the fastest path is:
 
 ## 17. Summary
 
-This repository is a multi-contract Soroban implementation of the ACBU protocol.
+This repository is a multi-contract Soroban implementation of the Auctra protocol.
 
 Its design hinges on:
 
@@ -610,13 +610,13 @@ The output of contracts (events) is intended to drive backend and off-chain proc
 
 ## Appendix B: Contract list (quick reference)
 
-- `acbu_minting`: mints ACBU from USDC / basket S-tokens / single S-token / fiat via operator.
-- `acbu_burning`: redeems ACBU back into S-tokens (single or basket).
-- `acbu_oracle`: stores and publishes currency rates and basket ACBU/USD.
-- `acbu_reserve_tracker`: stores reserves and enforces minimum reserve ratio.
-- `acbu_savings_vault`: term deposits with yield.
-- `acbu_lending_pool`: peer-to-peer, uncollateralized ACBU lending.
-- `acbu_escrow`: escrow create/release/refund.
-- `acbu_multisig`: emergency M-of-N admin guard.
+- `auctra_minting`: mints Auctra from USDC / basket S-tokens / single S-token / fiat via operator.
+- `auctra_burning`: redeems Auctra back into S-tokens (single or basket).
+- `auctra_oracle`: stores and publishes currency rates and basket Auctra/USD.
+- `auctra_reserve_tracker`: stores reserves and enforces minimum reserve ratio.
+- `auctra_savings_vault`: term deposits with yield.
+- `auctra_lending_pool`: peer-to-peer, uncollateralized Auctra lending.
+- `auctra_escrow`: escrow create/release/refund.
+- `auctra_multisig`: emergency M-of-N admin guard.
 - `shared`: shared event payloads, constants, and math.
 
